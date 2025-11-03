@@ -669,6 +669,7 @@ const response = await fetch('http://localhost:8080/posts', {
   body: JSON.stringify(data)
 });
 ```
+- Cookie 우선, Authorization header는 하위 호환성 지원
 
 **토큰 특성:**
 | 항목 | AT | RT |
