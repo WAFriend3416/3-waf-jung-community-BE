@@ -185,6 +185,13 @@ async function refreshAccessToken() {
 **Request Parts:**
 - `nickname` (String, 선택) - 닉네임 (10자 이내)
 - `profileImage` (File, 선택) - 프로필 이미지 (JPG/PNG/GIF, 최대 5MB)
+- `removeImage` (Boolean, 선택) - 이미지 제거 플래그
+
+**이미지 처리:**
+- `profileImage: [File]` - 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
+- `removeImage: true` - 기존 이미지 제거 (TTL 1시간 후 배치 삭제)
+- 둘 다 없음 - 이미지 유지
+- **주의:** removeImage와 profileImage 동시 전달 시 **profileImage가 우선 적용**됨
 
 **응답:**
 - 200: `update_profile_success` → 수정된 정보 반환
