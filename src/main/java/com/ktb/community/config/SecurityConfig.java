@@ -46,7 +46,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl));
+        // Public IP에서 포트 추출 (예: http://15.164.215.234:3000 → http://15.164.215.234)
+        String baseUrl = frontendUrl.replaceAll(":\d+$", "");
+        config.setAllowedOrigins(List.of(frontendUrl, baseUrl));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH","PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
