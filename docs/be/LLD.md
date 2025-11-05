@@ -20,7 +20,7 @@
 
 ## 1. 기술 스택
 
-**백엔드:** Spring Boot 3.5.6, Java 24, Gradle 8.x  
+**백엔드:** Spring Boot 3.5.6, Java 21 LTS, Gradle 8.x  
 **데이터베이스:** MySQL 8.0+, JPA (Hibernate), HikariCP  
 **보안:** Spring Security, JWT, BCrypt  
 **Storage:** AWS S3 (이미지 직접 저장, Free Tier)  
