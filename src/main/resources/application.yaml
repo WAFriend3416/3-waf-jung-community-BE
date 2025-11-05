@@ -38,9 +38,15 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-  
+
+  file:
+    name: logs/application.log  # 로그 파일 경로 (프로젝트 루트/logs/)
+    max-size: 10MB              # 파일당 최대 크기
+    max-history: 30             # 보관 기간 (일)
+
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 # JWT 설정
 jwt:
