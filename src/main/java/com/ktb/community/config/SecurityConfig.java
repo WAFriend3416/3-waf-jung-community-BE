@@ -52,7 +52,7 @@ public class SecurityConfig {
         allowedOrigins.add(frontendUrl);  // 기본 URL (포트 포함)
         
         // 포트 제거 버전 추가 (iptables 포트 포워딩 대응)
-        String baseUrl = frontendUrl.replaceAll(":\d+$", "");
+        String baseUrl = frontendUrl.replaceAll(":\\d+$", "");
         if (!baseUrl.equals(frontendUrl)) {
             allowedOrigins.add(baseUrl);
         }
