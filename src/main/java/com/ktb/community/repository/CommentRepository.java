@@ -24,7 +24,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query("SELECT c FROM Comment c " +
            "JOIN FETCH c.user " +
            "WHERE c.post.postId = :postId AND c.commentStatus = :status " +
-           "ORDER BY c.createdAt ASC")
+           "ORDER BY c.createdAt DESC")
     Page<Comment> findByPostIdAndStatusWithUser(
             @Param("postId") Long postId,
             @Param("status") CommentStatus status,
@@ -46,4 +46,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      * 댓글 수 카운트 (통계 검증용)
      */
     long countByPostPostIdAndCommentStatus(Long postId, CommentStatus status);
+
+    /**
+     * 상태별 전체 댓글 수 조회
+     */
+    long countByCommentStatus(CommentStatus status);
 }

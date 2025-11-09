@@ -73,7 +73,9 @@ public class UserService {
             user.updateNickname(request.getNickname());
         }
         
-        // 프로필 이미지 업로드 및 변경 (있을 경우)
+        // ========== 프로필 이미지 처리 ==========
+
+        // Case 1: 새 이미지로 교체 (profileImage: File) - 최우선
         if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
             // 1. 기존 이미지 TTL 복원 (고아 이미지 처리)
             Image oldImage = user.getProfileImage();
@@ -92,9 +94,23 @@ public class UserService {
             newImage.clearExpiresAt();
             user.updateProfileImage(newImage);
 
-            log.info("[User] 프로필 이미지 변경: userId={}, imageId={}",
-                     userId, newImage.getImageId());
+            log.info("[User] 프로필 이미지 변경: imageId={}", newImage.getImageId());
         }
+        // Case 2: 이미지 제거 요청 (removeImage: true)
+        else if (Boolean.TRUE.equals(request.getRemoveImage())) {
+            Image oldImage = user.getProfileImage();
+            if (oldImage != null) {
+                // TTL 복원 (고아 이미지 처리)
+                oldImage.setExpiresAt(LocalDateTime.now().plusHours(1));
+                log.info("[User] 고아 이미지 TTL 복원: imageId={}, expiresAt={}",
+                         oldImage.getImageId(), oldImage.getExpiresAt());
+
+                // 관계 해제
+                user.updateProfileImage(null);
+                log.info("[User] 프로필 이미지 제거: userId={}", userId);
+            }
+        }
+        // Case 3: 이미지 유지 (둘 다 없음)
 
         return UserResponse.from(user);
     }

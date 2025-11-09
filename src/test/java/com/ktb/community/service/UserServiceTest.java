@@ -368,4 +368,225 @@ class UserServiceTest {
         verify(imageService).uploadImage(profileImage);
         verify(imageRepository).findById(newImageId);
     }
+
+    @Test
+    @DisplayName("프로필 수정 - 이미지 제거 성공")
+    void updateProfile_RemoveImage_Success() {
+        // Given
+        Long userId = 1L;
+        Long authenticatedUserId = 1L;
+        Long oldImageId = 10L;
+
+        // 기존 이미지 (expires_at = NULL, 영구 보존)
+        Image oldImage = Image.builder()
+                .imageUrl("https://s3.amazonaws.com/profile.jpg")
+                .fileSize(1024)
+                .originalFilename("profile.jpg")
+                .expiresAt(null)
+                .build();
+        ReflectionTestUtils.setField(oldImage, "imageId", oldImageId);
+
+        // User (기존 프로필 이미지 있음)
+        User user = User.builder()
+                .email("test@example.com")
+                .passwordHash("encoded")
+                .nickname("testuser")
+                .role(UserRole.USER)
+                .build();
+        ReflectionTestUtils.setField(user, "userId", userId);
+        ReflectionTestUtils.setField(user, "profileImage", oldImage);
+
+        // Request (removeImage: true)
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .removeImage(true)
+                .build();
+
+        // Mocking
+        when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
+                .thenReturn(Optional.of(user));
+
+        // When
+        UserResponse response = userService.updateProfile(userId, authenticatedUserId, request);
+
+        // Then
+        assertThat(response).isNotNull();
+
+        // 기존 이미지: TTL 복원 확인 (now + 1h)
+        assertThat(oldImage.getExpiresAt()).isNotNull();
+        assertThat(oldImage.getExpiresAt()).isAfter(LocalDateTime.now());
+        assertThat(oldImage.getExpiresAt()).isBefore(LocalDateTime.now().plusHours(2));
+
+        // User의 profileImage는 null로 변경되어야 함
+        assertThat(user.getProfileImage()).isNull();
+
+        verify(userRepository).findByUserIdAndUserStatus(userId, UserStatus.ACTIVE);
+        verify(imageService, never()).uploadImage(any());
+    }
+
+    @Test
+    @DisplayName("프로필 수정 - removeImage와 profileImage 동시 전달 시 profileImage 우선")
+    void updateProfile_RemoveImage_WithNewImage_Priority() {
+        // Given
+        Long userId = 1L;
+        Long authenticatedUserId = 1L;
+        Long oldImageId = 10L;
+        Long newImageId = 20L;
+
+        // 기존 이미지
+        Image oldImage = Image.builder()
+                .imageUrl("https://s3.amazonaws.com/old-profile.jpg")
+                .fileSize(1024)
+                .originalFilename("old-profile.jpg")
+                .expiresAt(null)
+                .build();
+        ReflectionTestUtils.setField(oldImage, "imageId", oldImageId);
+
+        // User
+        User user = User.builder()
+                .email("test@example.com")
+                .passwordHash("encoded")
+                .nickname("testuser")
+                .role(UserRole.USER)
+                .build();
+        ReflectionTestUtils.setField(user, "userId", userId);
+        ReflectionTestUtils.setField(user, "profileImage", oldImage);
+
+        // 새 이미지
+        Image newImage = Image.builder()
+                .imageUrl("https://s3.amazonaws.com/new-profile.jpg")
+                .fileSize(2048)
+                .originalFilename("new-profile.jpg")
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+        ReflectionTestUtils.setField(newImage, "imageId", newImageId);
+
+        // Request (removeImage: true + profileImage 동시 전달)
+        MultipartFile profileImage = new MockMultipartFile(
+                "profileImage",
+                "new-profile.jpg",
+                "image/jpeg",
+                "test image content".getBytes()
+        );
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .removeImage(true)
+                .profileImage(profileImage)
+                .build();
+
+        // ImageResponse
+        ImageResponse imageResponse = ImageResponse.builder()
+                .imageId(newImageId)
+                .imageUrl("https://s3.amazonaws.com/new-profile.jpg")
+                .build();
+
+        // Mocking
+        when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
+                .thenReturn(Optional.of(user));
+        when(imageService.uploadImage(profileImage)).thenReturn(imageResponse);
+        when(imageRepository.findById(newImageId)).thenReturn(Optional.of(newImage));
+
+        // When
+        UserResponse response = userService.updateProfile(userId, authenticatedUserId, request);
+
+        // Then
+        assertThat(response).isNotNull();
+
+        // profileImage가 우선 적용 → 이미지 교체 동작 (제거 X)
+        assertThat(oldImage.getExpiresAt()).isNotNull(); // TTL 복원
+        assertThat(newImage.getExpiresAt()).isNull(); // 영구 보존
+        assertThat(user.getProfileImage()).isEqualTo(newImage);
+
+        verify(imageService).uploadImage(profileImage);
+        verify(imageRepository).findById(newImageId);
+    }
+
+    @Test
+    @DisplayName("프로필 수정 - 기존 이미지 없을 때 removeImage=true 에러 없음")
+    void updateProfile_RemoveImage_NoExistingImage_NoError() {
+        // Given
+        Long userId = 1L;
+        Long authenticatedUserId = 1L;
+
+        // User (프로필 이미지 없음)
+        User user = User.builder()
+                .email("test@example.com")
+                .passwordHash("encoded")
+                .nickname("testuser")
+                .role(UserRole.USER)
+                .build();
+        ReflectionTestUtils.setField(user, "userId", userId);
+        // profileImage는 기본적으로 null
+
+        // Request (removeImage: true)
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .removeImage(true)
+                .build();
+
+        // Mocking
+        when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
+                .thenReturn(Optional.of(user));
+
+        // When
+        UserResponse response = userService.updateProfile(userId, authenticatedUserId, request);
+
+        // Then
+        assertThat(response).isNotNull();
+
+        // 기존 이미지 없으므로 아무 동작 없음 (에러 발생 X)
+        assertThat(user.getProfileImage()).isNull();
+
+        verify(userRepository).findByUserIdAndUserStatus(userId, UserStatus.ACTIVE);
+        verify(imageService, never()).uploadImage(any());
+    }
+
+    @Test
+    @DisplayName("프로필 수정 - 이미지 제거 시 TTL 1시간 후 만료 확인")
+    void updateProfile_TTLRestore_WhenRemovingImage() {
+        // Given
+        Long userId = 1L;
+        Long authenticatedUserId = 1L;
+        Long oldImageId = 10L;
+
+        LocalDateTime beforeRemove = LocalDateTime.now();
+
+        // 기존 이미지 (expires_at = NULL, 영구 보존)
+        Image oldImage = Image.builder()
+                .imageUrl("https://s3.amazonaws.com/profile.jpg")
+                .fileSize(1024)
+                .originalFilename("profile.jpg")
+                .expiresAt(null)
+                .build();
+        ReflectionTestUtils.setField(oldImage, "imageId", oldImageId);
+
+        // User
+        User user = User.builder()
+                .email("test@example.com")
+                .passwordHash("encoded")
+                .nickname("testuser")
+                .role(UserRole.USER)
+                .build();
+        ReflectionTestUtils.setField(user, "userId", userId);
+        ReflectionTestUtils.setField(user, "profileImage", oldImage);
+
+        // Request
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .removeImage(true)
+                .build();
+
+        // Mocking
+        when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
+                .thenReturn(Optional.of(user));
+
+        // When
+        userService.updateProfile(userId, authenticatedUserId, request);
+
+        LocalDateTime afterRemove = LocalDateTime.now();
+
+        // Then
+        // TTL이 현재 시각 + 1시간으로 설정되었는지 확인
+        assertThat(oldImage.getExpiresAt()).isNotNull();
+        assertThat(oldImage.getExpiresAt()).isAfter(beforeRemove.plusMinutes(59)); // 최소 59분 후
+        assertThat(oldImage.getExpiresAt()).isBefore(afterRemove.plusHours(2)); // 최대 2시간 전
+
+        verify(userRepository).findByUserIdAndUserStatus(userId, UserStatus.ACTIVE);
+    }
 }
