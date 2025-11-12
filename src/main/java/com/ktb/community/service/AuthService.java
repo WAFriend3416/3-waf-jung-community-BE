@@ -55,7 +55,7 @@ public class AuthService {
      * 회원가입 (FR-AUTH-001)
      * - 이메일/닉네임 중복 확인
      * - 비밀번호 정책 검증
-     * - 프로필 이미지 업로드 (Multipart)
+     * - 프로필 이미지 참조 (2단계 업로드)
      * - 자동 로그인 (토큰 발급)
      */
     @Transactional
@@ -75,14 +75,14 @@ public class AuthService {
         // 비밀번호 암호화
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
-        // 프로필 이미지 업로드 (있을 경우)
+        // 프로필 이미지 참조 (있을 경우)
         com.ktb.community.entity.Image image = null;
-        if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
-            com.ktb.community.dto.response.ImageResponse imageResponse = imageService.uploadImage(request.getProfileImage());
-            image = imageRepository.findById(imageResponse.getImageId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
-            image.clearExpiresAt();  // 영구 보존
-            log.debug("[Auth] 회원가입 프로필 이미지 업로드: imageId={}", image.getImageId());
+        if (request.getImageId() != null) {
+            image = imageRepository.findById(request.getImageId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND,
+                            "Invalid or expired image ID: " + request.getImageId()));
+            image.clearExpiresAt();  // TTL 해제 → 영구 보존
+            log.debug("[Auth] 회원가입 프로필 이미지 연결: imageId={}", image.getImageId());
         }
 
         // 사용자 생성

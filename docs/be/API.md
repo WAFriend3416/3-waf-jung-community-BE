@@ -128,13 +128,23 @@ async function refreshAccessToken() {
 ### 2.1 회원가입
 **Endpoint:** `POST /users/signup` or `POST /users`
 
-**Content-Type:** `multipart/form-data`
+**Content-Type:** `application/json`
 
-**Request Parts:**
+**Request Body:**
+```json
+{
+  "email": "test@example.com",
+  "password": "Test1234!",
+  "nickname": "testuser",
+  "imageId": 123
+}
+```
+
+**필드:**
 - `email` (String, 필수) - 이메일 주소
 - `password` (String, 필수) - 비밀번호 (8-20자, 대/소/특수문자 각 1개+)
 - `nickname` (String, 필수) - 닉네임 (10자 이내)
-- `profileImage` (File, 선택) - 프로필 이미지 (JPG/PNG/GIF, 최대 5MB)
+- `imageId` (Number, 선택) - 프로필 이미지 ID (POST /images로 먼저 업로드 필요)
 
 **응답:**
 - 201: `register_success` → **AT는 응답 body, RT는 httpOnly Cookie** (자동 로그인)
@@ -142,8 +152,7 @@ async function refreshAccessToken() {
     - Body: `{ userId, email, nickname, profileImage, accessToken }` (AuthResponse)
 - 409: USER-002 (Email exists), USER-003 (Nickname exists)
 - 400: USER-004 (Password policy)
-- 413: IMAGE-002 (File too large)
-- 400: IMAGE-003 (Invalid file type)
+- 404: IMAGE-001 (Image not found)
 - 400/500: [공통 에러 코드](#응답-코드) 참조
 
 **응답 예시:**
@@ -180,25 +189,32 @@ async function refreshAccessToken() {
 
 **헤더:** Authorization: Bearer {access_token}
 
-**Content-Type:** `multipart/form-data`
+**Content-Type:** `application/json`
 
-**Request Parts:**
+**Request Body:**
+```json
+{
+  "nickname": "newname",
+  "imageId": 123,
+  "removeImage": false
+}
+```
+
+**필드:**
 - `nickname` (String, 선택) - 닉네임 (10자 이내)
-- `profileImage` (File, 선택) - 프로필 이미지 (JPG/PNG/GIF, 최대 5MB)
+- `imageId` (Number, 선택) - 새 프로필 이미지 ID (POST /images로 먼저 업로드 필요)
 - `removeImage` (Boolean, 선택) - 이미지 제거 플래그
 
 **이미지 처리:**
-- `profileImage: [File]` - 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
+- `imageId: 123` - 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
 - `removeImage: true` - 기존 이미지 제거 (TTL 1시간 후 배치 삭제)
 - 둘 다 없음 - 이미지 유지
-- **주의:** removeImage와 profileImage 동시 전달 시 **profileImage가 우선 적용**됨
+- **주의:** removeImage와 imageId 동시 전달 시 **imageId가 우선 적용**됨
 
 **응답:**
 - 200: `update_profile_success` → 수정된 정보 반환
-- 404: USER-001 (User not found)
+- 404: USER-001 (User not found), IMAGE-001 (Image not found)
 - 409: USER-003 (Nickname exists)
-- 413: IMAGE-002 (File too large)
-- 400: IMAGE-003 (Invalid file type)
 - 401/403/500: [공통 에러 코드](#응답-코드) 참조
 
 ---

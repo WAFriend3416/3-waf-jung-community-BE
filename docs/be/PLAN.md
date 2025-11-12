@@ -130,6 +130,16 @@
 
 ### 체크리스트
 
+**이미지 업로드 로직 통일 (Lambda 마이그레이션 준비):**
+- [x] DTOs 변경: MultipartFile → Long imageId (SignupRequest, UpdateProfileRequest)
+- [x] Controllers 변경: @ModelAttribute → @RequestBody, JSON 요청 (AuthController, UserController)
+- [x] Services 변경: ImageService.uploadImage() 제거 → imageRepository.findById() (AuthService, UserService)
+- [x] 영구 고아 처리: ImageRepository.findPermanentOrphans() 쿼리 추가, ImageCleanupBatchService 로직 추가 (7일 안전 마진)
+- [x] Tests 업데이트: UserServiceTest (3개 테스트) 수정
+- [x] Documentation 업데이트: API.md (Section 2.1, 2.3), PLAN.md (Phase 5)
+- **변경 파일**: Backend 12개 (DTOs 2, Controllers 2, Services 2, Repository 1, Batch 1, Tests 3), Docs 2개 (API.md, PLAN.md)
+- **Breaking Change**: 프론트엔드 동시 배포 필요 (회원가입/프로필 수정 API)
+
 **Phase 4 버그 수정:**
 - [x] PostService detached entity 문제 해결
   - 해결: `clearAutomatically = false` 적용 (PostStatsRepository 5개 메서드)

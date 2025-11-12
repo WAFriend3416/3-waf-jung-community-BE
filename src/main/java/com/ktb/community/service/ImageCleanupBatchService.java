@@ -52,8 +52,9 @@ public class ImageCleanupBatchService {
      * 고아 이미지 정리 배치 작업 (FR-IMAGE-002)
      * - 스케줄: 매일 새벽 3시 (CRON: 0 0 3 * * ?)
      * - TTL 만료 이미지 삭제 (S3 + DB Hard Delete)
+     * - 영구 고아 이미지 삭제 (expires_at=NULL, 참조 없음, 7일 이전)
      * - Self-injection으로 REQUIRES_NEW 트랜잭션 보장
-     * 
+     *
      * 상세: LLD.md Section 7.5 참조
      */
     @Scheduled(cron = "0 0 3 * * ?")
@@ -87,8 +88,45 @@ public class ImageCleanupBatchService {
         }
 
         long elapsedTime = System.currentTimeMillis() - startTime;
-        log.info("[Batch] 고아 이미지 정리 완료: 성공={}, 실패={}, 전체={}, 소요시간={}ms",
+        log.info("[Batch] TTL 만료 이미지 정리 완료: 성공={}, 실패={}, 전체={}, 소요시간={}ms",
                 successCount, failCount, expiredImages.size(), elapsedTime);
+
+        // ========== 영구 고아 이미지 처리 (Phase 5) ==========
+        log.info("[Batch] 영구 고아 이미지 정리 시작");
+        long orphanStartTime = System.currentTimeMillis();
+
+        // 7일 이전 이미지만 처리 (안전 마진)
+        LocalDateTime threshold = now.minusDays(7);
+        List<Image> permanentOrphans = imageRepository.findPermanentOrphans(threshold);
+
+        if (permanentOrphans.isEmpty()) {
+            log.info("[Batch] 삭제할 영구 고아 이미지 없음");
+            return;
+        }
+
+        int orphanSuccessCount = 0;
+        int orphanFailCount = 0;
+
+        for (Image image : permanentOrphans) {
+            try {
+                // 프록시를 통해 호출하여 REQUIRES_NEW 트랜잭션 적용
+                self.deleteImageInNewTransaction(image);
+                orphanSuccessCount++;
+                log.debug("[Batch] 영구 고아 이미지 삭제 성공: imageId={}", image.getImageId());
+
+            } catch (Exception e) {
+                orphanFailCount++;
+                log.error("[Batch] 영구 고아 이미지 삭제 실패: imageId={}, error={}",
+                         image.getImageId(), e.getMessage(), e);
+            }
+        }
+
+        long orphanElapsedTime = System.currentTimeMillis() - orphanStartTime;
+        log.info("[Batch] 영구 고아 이미지 정리 완료: 성공={}, 실패={}, 전체={}, 소요시간={}ms",
+                orphanSuccessCount, orphanFailCount, permanentOrphans.size(), orphanElapsedTime);
+
+        long totalElapsedTime = System.currentTimeMillis() - startTime;
+        log.info("[Batch] 고아 이미지 정리 배치 종료: 총 소요시간={}ms", totalElapsedTime);
     }
 
     /**
