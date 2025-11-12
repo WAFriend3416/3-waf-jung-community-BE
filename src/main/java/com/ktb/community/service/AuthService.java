@@ -142,6 +142,7 @@ public class AuthService {
      * 로그아웃 (FR-AUTH-003)
      * - Refresh Token 삭제
      */
+    @Transactional
     public void logout(String refreshToken) {
         // [세션 방식] (보존)
         // sessionManager.deleteSession(sessionId);

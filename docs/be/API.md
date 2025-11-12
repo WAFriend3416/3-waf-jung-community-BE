@@ -614,69 +614,22 @@ return PostResponse.from(post);
 - **AT (Access Token)**: 응답 body → 클라이언트 JS 메모리 → `Authorization: Bearer {token}` 헤더
 - **RT (Refresh Token)**: httpOnly Cookie → 브라우저 자동 관리 → `/auth/refresh_token` 전용
 
-**프론트엔드 구현 예시:**
+**프론트엔드 통합 패턴:**
 ```javascript
-const API_BASE_URL = 'http://localhost:8080';
-let accessToken = null;  // AT는 메모리 저장
+// 1. 로그인: AT는 메모리, RT는 httpOnly Cookie
+const { accessToken } = await login({ credentials: 'include' });
 
-// 로그인
-const response = await fetch(`${API_BASE_URL}/auth/login`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  credentials: 'include',  // RT 쿠키 받기
-  body: JSON.stringify({ email, password })
-});
+// 2. API 호출: AT를 Authorization 헤더로
+fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
-if (response.ok) {
-  const data = await response.json();
-  accessToken = data.data.accessToken;  // AT 저장
-  localStorage.setItem('userId', data.data.userId);
-}
+// 3. 401 시 자동 갱신: RT Cookie로 새 AT 발급
+if (status === 401) accessToken = await refreshToken();
 
-// API 요청 (AT를 Authorization 헤더로 전송)
-const posts = await fetch(`${API_BASE_URL}/posts`, {
-  headers: {
-    'Authorization': `Bearer ${accessToken}`  // AT 전송
-  },
-  credentials: 'include'  // RT 쿠키는 사용 안함 (갱신 시만 사용)
-});
-
-// AT 만료 시 자동 갱신
-if (response.status === 401) {
-  const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh_token`, {
-    method: 'POST',
-    credentials: 'include'  // RT 쿠키로 자동 전송
-  });
-  
-  if (refreshResponse.ok) {
-    const data = await refreshResponse.json();
-    accessToken = data.data.accessToken;  // 새 AT 저장
-    // 원래 요청 재시도
-  }
-}
+// 4. CSRF: XSRF-TOKEN Cookie → X-XSRF-TOKEN 헤더
+const csrfToken = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='))?.split('=')[1];
+fetch(url, { headers: { 'X-XSRF-TOKEN': csrfToken } });
 ```
-
-**CSRF 토큰 처리 (POST/PATCH/DELETE):**
-```javascript
-// CSRF 토큰 추출
-const csrfToken = document.cookie
-  .split('; ')
-  .find(row => row.startsWith('XSRF-TOKEN='))
-  ?.split('=')[1];
-
-// POST/PATCH/DELETE 요청 시 헤더 추가
-const response = await fetch('http://localhost:8080/posts', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${accessToken}`,  // AT
-    'X-XSRF-TOKEN': csrfToken  // CSRF 토큰
-  },
-  credentials: 'include',
-  body: JSON.stringify(data)
-});
-```
-- Cookie 우선, Authorization header는 하위 호환성 지원
+**참고:** 프론트엔드 레포지토리의 완전한 구현 예제 참조
 
 **토큰 특성:**
 | 항목 | AT | RT |
@@ -722,47 +675,17 @@ offset: 시작 위치 (0부터), limit: 한 번에 가져올 개수
 
 **도메인별 에러 코드:**
 
-#### AUTH 에러 코드 {#auth-에러-코드}
-- AUTH-001: Invalid credentials (잘못된 인증 정보)
-- AUTH-002: Invalid token (유효하지 않은 토큰)
-- AUTH-003: Token expired (토큰 만료)
-- AUTH-004: Invalid refresh token (유효하지 않은 리프레시 토큰)
+#### 도메인별 에러 코드
 
-#### USER 에러 코드 {#user-에러-코드}
-- USER-001: Not found (사용자를 찾을 수 없음)
-- USER-002: Email exists (이메일 중복)
-- USER-003: Nickname exists (닉네임 중복)
-- USER-004: Password policy (비밀번호 정책 위반)
-- USER-005: Account inactive (계정 비활성화)
-- USER-006: Password mismatch (비밀번호 불일치)
-- USER-007: Unauthorized access (권한 없음)
-
-#### POST 에러 코드 {#post-에러-코드}
-- POST-001: Not found (게시글을 찾을 수 없음)
-- POST-002: Owner mismatch (작성자 불일치)
-- POST-003: Already deleted (이미 삭제됨)
-- POST-004: Invalid status (유효하지 않은 상태)
-
-#### COMMENT 에러 코드 {#comment-에러-코드}
-- COMMENT-001: Not found (댓글을 찾을 수 없음)
-- COMMENT-002: Owner mismatch (작성자 불일치)
-- COMMENT-003: Already deleted (이미 삭제됨)
-
-#### LIKE 에러 코드 {#like-에러-코드}
-- LIKE-001: Already liked (이미 좋아요함)
-- LIKE-002: Like not found (좋아요를 찾을 수 없음)
-
-#### IMAGE 에러 코드 {#image-에러-코드}
-- IMAGE-001: Not found (이미지를 찾을 수 없음)
-- IMAGE-002: File too large (파일 크기 초과)
-- IMAGE-003: Invalid file type (유효하지 않은 파일 형식)
-
-#### COMMON 에러 코드 {#common-에러-코드}
-- COMMON-001: Invalid input (입력 데이터 검증 실패)
-- COMMON-002: Resource not found (리소스를 찾을 수 없음)
-- COMMON-003: Resource conflict (리소스 충돌)
-- COMMON-004: Too many requests (요청 횟수 초과)
-- COMMON-999: Server error (서버 내부 오류)
+| 도메인 | 개수 | 코드 범위 | 주요 이슈 |
+|--------|------|-----------|----------|
+| AUTH | 4 | 001-004 | 인증 실패, 토큰 문제 |
+| USER | 7 | 001-007 | 사용자 없음, 중복, 정책 위반 |
+| POST | 4 | 001-004 | 게시글 없음, 권한, 상태 |
+| COMMENT | 3 | 001-003 | 댓글 없음, 권한, 삭제 |
+| LIKE | 2 | 001-002 | 중복 좋아요, 좋아요 없음 |
+| IMAGE | 3 | 001-003 | 이미지 없음, 크기/형식 |
+| COMMON | 5 | 001-004, 999 | 유효성 검증, 서버 오류 |
 
 **전체 에러 코드:** `Users/jsh/ideaProject/community/src/main/java/com/ktb/community/enums/ErrorCode.java` 참조 (28개)
 
@@ -790,3 +713,11 @@ offset: 시작 위치 (0부터), limit: 한 번에 가져올 개수
   "timestamp": "2025-10-01T14:30:00"
 }
 ```
+
+---
+
+## 변경 이력
+
+| 날짜 | 버전 | 변경 내용 |
+|------|------|-----------|
+| 2025-11-12 | 1.1 | Section 7 에러 코드 + 프론트엔드 예제 압축 (800 tokens 절감) |
