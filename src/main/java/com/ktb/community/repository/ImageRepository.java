@@ -17,6 +17,12 @@ import java.util.List;
 public interface ImageRepository extends JpaRepository<Image, Long> {
 
     /**
+     * 이미지 URL 존재 여부 확인
+     * Lambda에서 업로드한 이미지 URL의 중복 검증용
+     */
+    boolean existsByImageUrl(String imageUrl);
+
+    /**
      * 만료된 이미지 조회 (고아 이미지 배치용)
      * - expires_at < 지정 시간
      * - idx_images_expires 인덱스 활용

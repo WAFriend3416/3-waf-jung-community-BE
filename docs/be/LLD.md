@@ -135,32 +135,78 @@ MySQL Database
 }
 ```
 
-### 6.2 인증 흐름 (httpOnly Cookie)
+### 6.2 인증 흐름 (JWT + Authorization Header)
 
-**로그인 (Cookie 기반):**
+**현재 구현:** 순수 Servlet Filter 기반 (`filter/JwtAuthenticationFilter.java`)
+
+**로그인:**
 1. Client → POST /auth/login (credentials: 'include')
 2. 서버 → BCrypt 검증
 3. 서버 → Access + Refresh 토큰 생성
-4. 서버 → httpOnly Cookie 발급 (access_token, refresh_token)
+4. 서버 → httpOnly Cookie 발급 (refresh_token만), Access Token은 응답 body
 5. 서버 → Refresh를 user_tokens 테이블에 저장
-6. 클라이언트 → Cookie 자동 저장 (JavaScript 접근 불가)
+6. 클라이언트 → AT는 JS 메모리 저장, RT는 Cookie 자동 저장
 
-**API 호출 (Cookie 자동 전송):**
-1. Client → API 요청 (credentials: 'include')
-2. 브라우저 → Cookie 자동 포함 (access_token)
-3. JwtAuthenticationFilter → Cookie에서 토큰 추출
-4. JwtAuthenticationFilter → 토큰 검증 및 SecurityContext 저장
-5. 비즈니스 로직 실행
+**API 호출 (Authorization Header):**
+1. Client → API 요청 (`Authorization: Bearer {access_token}`)
+2. JwtAuthenticationFilter (순수 Servlet Filter, @Order(1))
+   - Authorization header에서 토큰 추출
+   - JWT 검증 (JwtTokenProvider)
+   - userId 추출 및 Request Attribute 저장 (`req.setAttribute("userId", userId)`)
+3. Controller → HttpServletRequest에서 userId 추출
+4. 비즈니스 로직 실행
 
-**토큰 갱신 (Cookie 기반):**
+**토큰 갱신:**
 1. Client → POST /auth/refresh_token (credentials: 'include')
 2. 서버 → Cookie에서 refresh_token 추출
 3. 서버 → user_tokens 테이블 검증
-4. 서버 → 새 access_token 발급 → httpOnly Cookie 업데이트
+4. 서버 → 새 access_token 발급 → 응답 body (RT 재사용)
 
-**하위 호환성:**
-- Authorization header (Bearer token) 지원 유지
-- Cookie 우선, header는 fallback
+**필터 구현 예시:**
+```java
+@Component
+@Order(1)
+public class JwtAuthenticationFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response,
+                         FilterChain chain) {
+        // 1. Authorization header에서 토큰 추출
+        String bearerToken = req.getHeader("Authorization");
+        String jwt = bearerToken.substring(7); // "Bearer " 제거
+
+        // 2. JWT 검증
+        if (!jwtTokenProvider.validateToken(jwt)) {
+            sendUnauthorized(res, "Invalid token");
+            return;
+        }
+
+        // 3. userId 추출 및 Request Attribute 저장
+        Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+        req.setAttribute("userId", userId);
+
+        chain.doFilter(request, response);
+    }
+}
+```
+
+**Controller 통합:**
+```java
+@PostMapping
+public ResponseEntity<ApiResponse<PostResponse>> createPost(
+        @RequestBody PostCreateRequest request,
+        HttpServletRequest httpRequest) {
+
+    Long userId = (Long) httpRequest.getAttribute("userId");
+    PostResponse post = postService.createPost(request, userId);
+    return ResponseEntity.ok(ApiResponse.success("create_post_success", post));
+}
+```
+
+**공개 엔드포인트 처리:**
+- GET /posts, GET /users/{id}: 선택적 인증 (JWT 있으면 검증, 없으면 통과)
+- POST /posts, PATCH /users/{id}: 필수 인증 (JWT 없으면 401)
+- OPTIONS 요청: 통과 (CORS Preflight)
 
 ### 6.3 핵심 보안 설정 (CORS + CSRF)
 

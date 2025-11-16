@@ -1,0 +1,17 @@
+{
+  "name": "upload-image-lambda",
+  "version": "2.0.0",
+  "description": "Lambda function for image upload to S3 (Parameter Store version)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "@aws-sdk/client-s3": "^3.470.0",
+    "@aws-sdk/client-ssm": "^3.470.0"
+  },
+  "devDependencies": {},
+  "author": "",
+  "license": "ISC"
+}

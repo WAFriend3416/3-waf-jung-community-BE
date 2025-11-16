@@ -1,5 +1,6 @@
 package com.ktb.community.service;
 
+import com.ktb.community.dto.request.ImageMetadataRequest;
 import com.ktb.community.dto.response.ImageResponse;
 import com.ktb.community.entity.Image;
 import com.ktb.community.enums.ErrorCode;
@@ -47,9 +48,9 @@ public class ImageService {
      */
     @Transactional
     public ImageResponse uploadImage(MultipartFile file) {
-        log.debug("[Image] 이미지 업로드 시작: filename={}, size={}, contentType={}", 
+        log.debug("[Image] 이미지 업로드 시작: filename={}, size={}, contentType={}",
             file.getOriginalFilename(), file.getSize(), file.getContentType());
-        
+
         // 1. 파일 검증
         FileValidator.validateImageFile(file);
 
@@ -67,6 +68,49 @@ public class ImageService {
 
         Image savedImage = imageRepository.save(image);
         log.info("[Image] 이미지 업로드 완료: imageId={}, s3Key={}", savedImage.getImageId(), s3Key);
+
+        return ImageResponse.from(savedImage);
+    }
+
+    /**
+     * 이미지 메타데이터 등록 (Lambda 업로드 후 Backend 등록)
+     * - imageUrl 검증 (S3 버킷 URL 형식)
+     * - 중복 검증
+     * - DB 저장 (expires_at = 1시간 후)
+     *
+     * 플로우: Lambda (S3 업로드) → Backend (메타데이터 등록) → imageId 반환
+     */
+    @Transactional
+    public ImageResponse registerImageMetadata(ImageMetadataRequest request) {
+        log.debug("[Image] 이미지 메타데이터 등록 시작: imageUrl={}, fileSize={}",
+            request.getImageUrl(), request.getFileSize());
+
+        // 1. imageUrl 형식 검증
+        String s3BaseUrl = String.format("https://%s.s3.%s.amazonaws.com/", bucketName, region);
+        if (!request.getImageUrl().startsWith(s3BaseUrl)) {
+            log.warn("[Image] 잘못된 이미지 URL 형식: imageUrl={}", request.getImageUrl());
+            throw new BusinessException(ErrorCode.INVALID_IMAGE_URL,
+                "Image URL must start with: " + s3BaseUrl);
+        }
+
+        // 2. 중복 검증
+        if (imageRepository.existsByImageUrl(request.getImageUrl())) {
+            log.warn("[Image] 이미 등록된 이미지 URL: imageUrl={}", request.getImageUrl());
+            throw new BusinessException(ErrorCode.RESOURCE_CONFLICT,
+                "Image URL already exists: " + request.getImageUrl());
+        }
+
+        // 3. DB 저장 (expires_at = 1시간 후)
+        Image image = Image.builder()
+                .imageUrl(request.getImageUrl())
+                .fileSize(request.getFileSize())
+                .originalFilename(request.getOriginalFilename())
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+
+        Image savedImage = imageRepository.save(image);
+        log.info("[Image] 이미지 메타데이터 등록 완료: imageId={}, imageUrl={}",
+            savedImage.getImageId(), savedImage.getImageUrl());
 
         return ImageResponse.from(savedImage);
     }

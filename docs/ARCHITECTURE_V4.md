@@ -1176,9 +1176,9 @@ Alarm 4: Unhealthy Targets
   - [*] Health Check 설정 - backend : /health 엔드포인트 추가
 
 - [ ] Lambda + API Gateway
-  - [ ] Lambda 함수 배포 (upload-image.zip)
+  - [*] Lambda 함수 배포 (upload-image.zip)
   - [ ] API Gateway CORS 설정
-  - [ ] Secrets Manager 권한 부여
+  - [ ] Secrets Manager 권한 부여 -> paramter store로 변경
 
 ---
 

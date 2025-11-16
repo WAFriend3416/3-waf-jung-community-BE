@@ -1,0 +1,19 @@
+# 환경 변수
+.env
+.env.local
+
+# 의존성
+node_modules/
+
+# 로그
+*.log
+npm-debug.log*
+
+# 운영체제
+.DS_Store
+
+# AWS SAM
+.aws-sam/
+
+# 패키징 결과
+*.zip
