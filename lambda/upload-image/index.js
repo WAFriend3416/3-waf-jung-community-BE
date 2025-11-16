@@ -122,7 +122,8 @@ async function uploadToS3(userId, file, contentType) {
         Bucket: process.env.S3_BUCKET,
         Key: s3Key,
         Body: file,
-        ContentType: contentType
+        ContentType: contentType,
+        ACL: 'public-read'  // 이미지 공개 설정
     }));
 
     return `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
