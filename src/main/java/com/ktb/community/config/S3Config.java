@@ -36,3 +36,4 @@ public class S3Config {
                 .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
                 .build();
     }
+}

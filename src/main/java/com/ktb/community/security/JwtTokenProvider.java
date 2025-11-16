@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * [세션 전환]
@@ -76,6 +77,34 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(String.valueOf(userId))
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * Guest Token 생성 (5분, 회원가입용)
+     *
+     * 용도: 회원가입 시 프로필 이미지 업로드를 위한 임시 토큰
+     * - JWT가 없으면 Lambda 이미지 업로드 불가
+     * - 회원가입 완료 후 정식 AT/RT로 교체
+     *
+     * 특징:
+     * - 유효기간: 5분 (300,000ms)
+     * - subject: guest-{UUID} (익명 식별자)
+     * - role: GUEST
+     * - Refresh Token 없음 (일회용)
+     *
+     * @return JWT Guest Token
+     */
+    public String generateGuestToken() {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + 300000L); // 5분
+
+        return Jwts.builder()
+                .subject("guest-" + UUID.randomUUID())
+                .claim("role", "GUEST")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)

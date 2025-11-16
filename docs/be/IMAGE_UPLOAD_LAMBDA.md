@@ -47,8 +47,20 @@ Step 2: 메타데이터 등록 (게시글 작성 시)
 
 ### 1.3 적용 범위
 
-| 기능 | 방식 | 엔드포인트 |
-|------|------|-----------|
+| 기능 | 방식 | 인증 | 엔드포인트 |
+|------|------|------|-----------|
+| **회원가입 이미지** | Lambda | Guest Token | POST /images (API Gateway) |
+| **게시글 이미지** | Lambda | User Token | POST /images (API Gateway) |
+| **프로필 이미지** | Lambda | User Token | POST /images (API Gateway) |
+| **회원가입 (메타데이터)** | Backend | Guest Token → User Token | POST /users/signup |
+| **프로필 수정 (메타데이터)** | Backend | User Token | PATCH /users/{userId} |
+
+**플로우:**
+1. **회원가입 시**: GET /auth/guest-token → Lambda 이미지 업로드 → POST /users/signup (imageId 포함)
+2. **게시글 작성 시**: Lambda 이미지 업로드 → POST /posts (imageId 포함)
+3. **프로필 수정 시**: Lambda 이미지 업로드 → PATCH /users/{userId} (imageId 포함)
+
+------|------|-----------|
 | **회원가입** | Backend Multipart | POST /users/signup |
 | **프로필 수정** | Backend Multipart | PATCH /users/{userId} |
 | **게시글 이미지** | Lambda (신규) | POST /images (API Gateway) |
@@ -191,14 +203,63 @@ curl -X POST "https://abc123.execute-api.ap-northeast-2.amazonaws.com/images" \
 
 | 기능 | 구현 | 코드 위치 |
 |------|------|----------|
-| **JWT 검증** | jwt.verify() + Parameter Store | Line 43-62 |
-| **토큰 만료 구분** | TokenExpiredError 체크 | Line 57-58 |
+| **JWT 검증** | jwt.verify() + Parameter Store | Line 47-67 |
+| **토큰 타입 구분** | role 필드 추출 (USER/GUEST) | Line 59 |
+| **토큰 만료 구분** | TokenExpiredError 체크 | Line 62-63 |
 | **파일 크기 제한** | 5MB (5 * 1024 * 1024) | Line 95-98 |
 | **Content-Type 검증** | 화이트리스트 (jpeg, png, gif) | Line 89-92 |
 | **Magic Number 검증** | 바이트 단위 시그니처 확인 | Line 64-82 |
 | **MIME Spoofing 방지** | 헤더와 실제 파일 내용 일치 확인 | Line 76-81 |
 
-### 4.3 S3 키 생성 로직
+### 4.3 Guest Token 지원
+
+**용도:** 회원가입 시 프로필 이미지 업로드
+
+**JWT Payload 구조:**
+```json
+{
+  "sub": "guest-550e8400-e29b-41d4-a716-446655440000",
+  "role": "GUEST",
+  "iat": 1234567890,
+  "exp": 1234568190
+}
+```
+
+**검증 로직 (Line 47-67):**
+```javascript
+async function verifyJWT(token) {
+    // ...
+    const payload = jwt.verify(token, jwtSecret);
+    return {
+        userId: payload.sub,        // "guest-{UUID}" 또는 실제 userId
+        email: payload.email,       // GUEST는 undefined
+        role: payload.role || 'USER'  // 기본값: USER
+    };
+}
+```
+
+**역할별 처리 (Line 159-163):**
+```javascript
+// Handler에서 로깅
+if (role === 'GUEST') {
+    console.log('✅ Guest Token detected - signup image upload');
+} else {
+    console.log('✅ User Token detected - authenticated upload');
+}
+```
+
+**S3 키 생성:**
+- User Token: `users/{userId}/images/{timestamp}-{uuid}.{ext}`
+- Guest Token: `users/guest-{UUID}/images/{timestamp}-{uuid}.{ext}`
+- **회원가입 완료 시**: Backend가 이미지 URL로 메타데이터 등록, TTL 해제
+
+**보안 특징:**
+- 유효기간: 5분 (회원가입 플로우 내에서만 유효)
+- DB 저장 없음 (stateless)
+- Refresh Token 없음 (일회용)
+- 발급: GET /auth/guest-token (Backend)
+
+### 4.4 S3 키 생성 로직
 
 **패턴:** `users/{userId}/images/{timestamp}-{uuid}.{extension}`
 
@@ -210,7 +271,7 @@ curl -X POST "https://abc123.execute-api.ap-northeast-2.amazonaws.com/images" \
 - **uuid:** 동시 업로드 충돌 방지 (crypto.randomUUID())
 - **extension:** Content-Type에서 추출 (jpeg, png, gif)
 
-### 4.4 에러 코드 매핑
+### 4.5 에러 코드 매핑
 
 | Lambda Error | HTTP | Backend Code | 설명 |
 |--------------|------|--------------|------|

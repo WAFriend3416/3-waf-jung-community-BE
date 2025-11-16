@@ -39,6 +39,10 @@ async function getJwtSecret() {
 
 /**
  * JWT 검증
+ *
+ * 지원하는 토큰 타입:
+ * 1. User Token (role: USER) - 정식 사용자 토큰
+ * 2. Guest Token (role: GUEST) - 회원가입용 임시 토큰 (5분)
  */
 async function verifyJWT(token) {
     if (!token) {
@@ -51,7 +55,8 @@ async function verifyJWT(token) {
         const payload = jwt.verify(token, jwtSecret);
         return {
             userId: payload.sub,
-            email: payload.email
+            email: payload.email,
+            role: payload.role || 'USER'  // 기본값: USER
         };
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
@@ -148,23 +153,30 @@ exports.handler = async (event) => {
     try {
         // 1. JWT 검증
         const token = (event.headers.authorization || event.headers.Authorization)?.replace('Bearer ', '');
-        const { userId } = await verifyJWT(token);
+        const { userId, role } = await verifyJWT(token);
 
-        // 2. 파일 검증
+        // 2. 역할별 로깅
+        if (role === 'GUEST') {
+            console.log('✅ Guest Token detected - signup image upload');
+        } else {
+            console.log('✅ User Token detected - authenticated upload');
+        }
+
+        // 3. 파일 검증
         const contentType = event.headers['content-type'] || event.headers['Content-Type'];
         const fileBuffer = Buffer.from(event.body, 'base64');
         const fileSize = fileBuffer.length;
 
         validateFile(contentType, fileSize, fileBuffer);
 
-        // 3. S3 업로드
+        // 4. S3 업로드
         const imageUrl = await uploadToS3(userId, fileBuffer, contentType);
 
-        // 4. 메타데이터 생성
+        // 5. 메타데이터 생성
         const originalFilename = event.headers['x-filename'] || `image-${Date.now()}`;
         const metadata = createImageMetadata(imageUrl, fileSize, originalFilename);
 
-        // 5. 응답 (DB 저장은 백엔드가 처리)
+        // 6. 응답 (DB 저장은 백엔드가 처리)
         return {
             statusCode: 201,
             headers: {

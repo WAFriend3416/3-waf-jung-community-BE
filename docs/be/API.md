@@ -123,6 +123,72 @@ async function refreshAccessToken() {
 
 ---
 
+### 1.4 Guest Token 발급 (회원가입용)
+**Endpoint:** `GET /auth/guest-token`
+
+**용도:** 회원가입 시 프로필 이미지 업로드를 위한 임시 토큰
+
+**특징:**
+- **유효기간**: 5분
+- **role**: GUEST
+- **Refresh Token**: 없음 (일회용)
+- **Rate Limit**: 없음 (회원가입 페이지 로드 시 자동 발급)
+- **DB 저장**: 없음 (stateless)
+
+**사용 흐름:**
+1. 회원가입 페이지 로드 시 자동 발급
+2. Lambda 이미지 업로드 시 `Authorization: Bearer {guestToken}` 전송
+3. 회원가입 완료 후 정식 AT/RT로 교체
+
+**응답:**
+- 200: `guest_token_issued` → guestToken (String)
+- 500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "guest_token_issued",
+  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
+
+**Lambda 검증:**
+- Lambda는 `role: GUEST`인 경우 회원가입 업로드로 간주
+- TTL 1시간 설정 (회원가입 완료 전까지 임시 보관)
+- 회원가입 미완료 시 배치 작업으로 자동 삭제
+
+**프론트엔드 통합 예시:**
+```javascript
+// signup.js - 회원가입 페이지 로드 시
+async function initSignupPage() {
+    const response = await fetch(`${API_BASE_URL}/auth/guest-token`);
+    const { data: guestToken } = await response.json();
+
+    // 이미지 업로드 시 사용
+    sessionStorage.setItem('guestToken', guestToken);
+}
+
+// 프로필 이미지 업로드
+async function uploadProfileImage(file) {
+    const guestToken = sessionStorage.getItem('guestToken');
+
+    const response = await fetch(`${LAMBDA_API_URL}/images`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${guestToken}`,
+            'Content-Type': file.type
+        },
+        body: file
+    });
+
+    const { data: { imageUrl } } = await response.json();
+    return imageUrl;
+}
+```
+
+---
+
 ## 2. 사용자 (Users)
 
 ### 2.1 회원가입

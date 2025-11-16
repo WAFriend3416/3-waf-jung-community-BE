@@ -121,10 +121,36 @@ MySQL Database
 
 ### 6.1 JWT 토큰
 
-**Access Token:** 30분, API 인증  
-**Refresh Token:** 7일, Access 갱신, `user_tokens` 테이블 저장
+**3가지 토큰 타입:**
 
-**Payload 예시:**
+| 토큰 타입 | 유효기간 | 용도 | DB 저장 | Refresh Token |
+|----------|---------|------|---------|--------------|
+| Access Token (AT) | 15분 | API 인증 | ❌ | ✅ |
+| Refresh Token (RT) | 7일 | AT 갱신 | ✅ user_tokens | ❌ |
+| Guest Token | 5분 | 회원가입 이미지 업로드 | ❌ | ❌ |
+
+**Access Token (AT):**
+- **유효기간**: 15분 (900,000ms)
+- **용도**: API 인증
+- **전달**: Authorization: Bearer {token}
+- **저장**: 클라이언트 JS 메모리
+
+**Refresh Token (RT):**
+- **유효기간**: 7일 (604,800,000ms)
+- **용도**: Access Token 갱신
+- **전달**: httpOnly Cookie (SameSite=Lax, Path=/auth)
+- **저장**: user_tokens 테이블 (RDB)
+
+**Guest Token:**
+- **유효기간**: 5분 (300,000ms)
+- **용도**: 회원가입 시 프로필 이미지 업로드
+- **전달**: Authorization: Bearer {guestToken}
+- **저장**: 없음 (stateless)
+- **특징**: Refresh Token 없음, DB 저장 없음, 일회용
+- **발급**: GET /auth/guest-token
+- **Payload**: subject=guest-{UUID}, role=GUEST
+
+**Payload 예시 (User Token):**
 ```json
 {
   "sub": "user_id",
@@ -132,6 +158,16 @@ MySQL Database
   "role": "USER",
   "iat": 1234567890,
   "exp": 1234569690
+}
+```
+
+**Payload 예시 (Guest Token):**
+```json
+{
+  "sub": "guest-550e8400-e29b-41d4-a716-446655440000",
+  "role": "GUEST",
+  "iat": 1234567890,
+  "exp": 1234568190
 }
 ```
 

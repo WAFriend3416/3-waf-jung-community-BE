@@ -212,4 +212,24 @@ public class AuthService {
         log.debug("[Auth] JWT 토큰 생성: userId={}", user.getUserId());
         return new TokenPair(accessToken, refreshToken);
     }
+
+    /**
+     * Guest Token 발급 (회원가입용)
+     *
+     * 용도: 회원가입 시 프로필 이미지 업로드를 위한 임시 토큰
+     * - JWT가 없으면 Lambda 이미지 업로드 불가
+     * - 회원가입 완료 후 정식 AT/RT로 교체
+     *
+     * 특징:
+     * - 유효기간: 5분
+     * - role: GUEST
+     * - DB 저장 없음 (stateless, 일회용)
+     *
+     * @return Guest Token (JWT)
+     */
+    public String generateGuestToken() {
+        String guestToken = jwtTokenProvider.generateGuestToken();
+        log.debug("[Auth] Guest Token 생성: role=GUEST, validity=5분");
+        return guestToken;
+    }
 }
