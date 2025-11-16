@@ -300,6 +300,10 @@ public class PostService {
                     "Not authorized to delete this post");
         }
 
+        // 연결된 이미지 TTL 복원 및 브릿지 삭제
+        restoreExpiresAtAndDeleteBridge(postId);
+        log.info("[Post] 게시글 삭제 시 이미지 고아 처리: postId={}", postId);
+
         // Soft Delete
         post.updateStatus(PostStatus.DELETED);
 
