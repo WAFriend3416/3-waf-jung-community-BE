@@ -7,8 +7,8 @@
 
 set -e  # 에러 발생 시 즉시 종료
 
-BACKEND_DIR="/home/ubuntu/IdeaProjects/community"  # 실제 경로로 변경
-FRONTEND_DIR="/home/ubuntu/ktb_community_fe"  # 실제 경로로 변경
+BACKEND_DIR="$HOME/IdeaProjects/community"
+FRONTEND_DIR="$HOME/ktb_community_fe"
 
 echo "========================================="
 echo "서비스 종료 중..."

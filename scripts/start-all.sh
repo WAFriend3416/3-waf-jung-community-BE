@@ -38,7 +38,7 @@ echo "========================================="
 # Backend 실행
 # ============================================
 
-BACKEND_DIR="/home/ubuntu/IdeaProjects/community"  # 실제 경로로 변경
+BACKEND_DIR="$HOME/IdeaProjects/community"
 BACKEND_JAR="$BACKEND_DIR/build/libs/community-0.0.1-SNAPSHOT.jar"
 
 if [ ! -f "$BACKEND_JAR" ]; then
@@ -57,7 +57,7 @@ echo "✅ Backend PID: $(cat backend.pid)"
 # Frontend 실행
 # ============================================
 
-FRONTEND_DIR="/home/ubuntu/ktb_community_fe"  # 실제 경로로 변경
+FRONTEND_DIR="$HOME/ktb_community_fe"
 
 if [ ! -d "$FRONTEND_DIR" ]; then
   echo "❌ Frontend 디렉토리가 없습니다: $FRONTEND_DIR"
