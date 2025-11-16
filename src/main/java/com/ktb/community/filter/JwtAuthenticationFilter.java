@@ -44,7 +44,8 @@ public class JwtAuthenticationFilter implements Filter {
             "/users",          // 회원가입 alias
             "/terms",
             "/privacy",
-            "/stats"           // 통계 API
+            "/stats",          // 통계 API
+            "/health"          // ALB Target Group 헬스 체크
     );
 
     @Override
