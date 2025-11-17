@@ -1,0 +1,50 @@
+# Git 관련
+.git
+.gitignore
+.gitattributes
+
+# Gradle 빌드 결과물 및 캐시
+build/
+.gradle/
+gradle-wrapper.jar
+
+# IDE 설정 파일
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# 환경 변수 및 민감 정보
+.env
+.env.*
+*.key
+*.pem
+application-local.yml
+application-dev.yml
+
+# 로그 파일
+*.log
+logs/
+
+# 임시 파일
+*.tmp
+*.bak
+*~
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# Node.js (프론트엔드 관련, 있다면)
+node_modules/
+npm-debug.log
+
+# 문서 및 기타
+docs/
+*.md
+!README.md
+
+# 테스트 결과물
+coverage/
+test-results/
