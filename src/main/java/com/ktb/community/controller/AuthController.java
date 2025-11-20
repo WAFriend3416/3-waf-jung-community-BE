@@ -122,12 +122,13 @@ public class AuthController {
      *
      * 특징:
      * - 유효기간: 5분
+     * - subject: "0" (게스트 전용 ID)
      * - role: GUEST
      * - Refresh Token 없음 (일회용)
      * - Rate Limit 없음 (회원가입 페이지 로드 시 자동 발급)
      *
      * Lambda 검증:
-     * - Lambda는 role: GUEST인 경우 회원가입 업로드로 간주
+     * - Lambda는 role: GUEST 또는 userId == 0 체크로 회원가입 업로드 판별
      * - TTL 1시간 설정 (회원가입 안 하면 자동 삭제)
      */
     @GetMapping("/guest-token")

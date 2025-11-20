@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.UUID;
 
 /**
  * [세션 전환]
@@ -92,9 +91,13 @@ public class JwtTokenProvider {
      *
      * 특징:
      * - 유효기간: 5분 (300,000ms)
-     * - subject: guest-{UUID} (익명 식별자)
+     * - subject: "0" (게스트 전용 ID, 정식 회원은 1부터 시작)
      * - role: GUEST
      * - Refresh Token 없음 (일회용)
+     *
+     * 설계 결정:
+     * - UUID 대신 숫자 0 사용으로 getUserIdFromToken() 호환성 확보
+     * - userId == 0 체크로 게스트 사용자 판별
      *
      * @return JWT Guest Token
      */
@@ -103,7 +106,7 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + 300000L); // 5분
 
         return Jwts.builder()
-                .subject("guest-" + UUID.randomUUID())
+                .subject("0")  // 게스트 전용 ID (Long 파싱 가능)
                 .claim("role", "GUEST")
                 .issuedAt(now)
                 .expiration(expiryDate)
