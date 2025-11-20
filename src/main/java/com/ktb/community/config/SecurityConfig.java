@@ -63,6 +63,10 @@ public class SecurityConfig {
             allowedOrigins.add("http://localhost");
         }
 
+        // WAF 도메인 추가 (CloudFront/WAF 라우팅)
+        allowedOrigins.add("https://community.ktb-waf.cloud");
+        allowedOrigins.add("http://community.ktb-waf.cloud");
+
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
