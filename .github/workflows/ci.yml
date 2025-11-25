@@ -1,14 +1,16 @@
-name: CI Pipeline
+name: Deploy
 
 on:
-  pull_request:
+  push:
     branches: [deploy]
-    types: [closed]
+
+env:
+  REGISTRY: ${{ secrets.REGISTRY_URL }}
+  IMAGE_NAME: community-be
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout
@@ -32,13 +34,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Generate image tag
+        id: tag
+        run: echo "TAG=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: |
-            registry.ktb-waf.cloud/community-be:latest
-            registry.ktb-waf.cloud/community-be:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}
+
+      - name: Print deployment info
+        run: |
+          echo "✅ 이미지 푸시 완료!"
+          echo "이미지: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}"
