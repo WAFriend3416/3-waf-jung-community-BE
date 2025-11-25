@@ -52,5 +52,5 @@ jobs:
 
       - name: Print deployment info
         run: |
-          echo "✅ 이미지 푸시 완료!"
+          echo "이미지 푸시 완료"
           echo "이미지: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}"
