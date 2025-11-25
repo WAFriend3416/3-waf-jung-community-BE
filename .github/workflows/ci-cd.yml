@@ -90,14 +90,21 @@ jobs:
 
             # 5. 헬스체크
             echo "=== 헬스체크 (최대 60초) ==="
-            for i in {1..60}; do
+            i=1
+            health_ok=false
+            while [ $i -le 60 ]; do
               if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
                 echo "헬스체크 성공"
-                exit 0
+                health_ok=true
+                break
               fi
               sleep 1
+              i=$((i + 1))
             done
-            echo "헬스체크 실패"
-            docker compose logs --tail 30
-            exit 1
+
+            if [ "$health_ok" = "false" ]; then
+              echo "헬스체크 실패"
+              docker compose logs --tail 30
+              exit 1
+            fi
           ENDSSH
