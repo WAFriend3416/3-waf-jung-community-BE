@@ -56,13 +56,16 @@ jobs:
           echo "이미지: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}"
 
       # CD: SSH로 EC2 배포
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SSH_HOST }} << 'ENDSSH'
             set -e
 
             # 1. 필수 프로그램 확인
@@ -89,7 +92,7 @@ jobs:
             echo "=== 헬스체크 (최대 60초) ==="
             for i in {1..60}; do
               if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
-                echo "헬스체크 성공 (${i}초)"
+                echo "헬스체크 성공"
                 exit 0
               fi
               sleep 1
@@ -97,3 +100,4 @@ jobs:
             echo "헬스체크 실패"
             docker-compose logs --tail 30
             exit 1
+          ENDSSH
