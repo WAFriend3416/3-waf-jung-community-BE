@@ -52,4 +52,6 @@ docs/legacy/
 .env
 
 # Temporary scripts
-scripts/check_password.sql
+*.sql
+*backup
+*.multi-stage

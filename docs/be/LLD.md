@@ -678,7 +678,7 @@ public Post toEntity(User user) {
 | **HikariCP** | Spring Boot default | DB 커넥션 풀 (default: 10) |
 | **Multipart** | max-file-size: 5MB, max-request-size: 10MB | 이미지 업로드 제한 |
 | **JPA** | ddl-auto: validate, open-in-view: false, default_batch_fetch_size: 100 | 운영 모드, OSIV 비활성화, N+1 최적화 |
-| **JWT** | access: 30분 (1800000ms), refresh: 7일 (604800000ms) | 토큰 유효기간 |
+| **JWT** | access: 15분 (900000ms), refresh: 7일 (604800000ms) | 토큰 유효기간 |
 | **S3** | bucket/region 환경 변수 주입 | DefaultCredentialsProvider 체인 |
 | **Rate Limit** | 코드 기반 (@RateLimit 어노테이션) | 엔드포인트별 개별 설정 |
 | **Logging** | root: INFO, com.ktb.community: DEBUG | 개발 환경 로깅 레벨 |

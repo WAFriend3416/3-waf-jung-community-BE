@@ -1,50 +1,72 @@
-# Git 관련
+# ===== Git =====
 .git
 .gitignore
 .gitattributes
 
-# Gradle 빌드 결과물 및 캐시
+# ===== Build & Gradle =====
 build/
 .gradle/
-gradle-wrapper.jar
+bin/
+# NOTE: gradle-wrapper.jar는 제외하지 않음 (빌드에 필요)
 
-# IDE 설정 파일
+# ===== IDE Settings =====
 .idea/
+*.iws
 *.iml
+*.ipr
+out/
 .vscode/
-*.swp
-*.swo
+.editorconfig
 
-# 환경 변수 및 민감 정보
+# ===== Environment & Secrets =====
 .env
 .env.*
 *.key
 *.pem
+
+# ===== Application Configuration (Dev/Local) =====
 application-local.yml
 application-dev.yml
+application-test.yml
 
-# 로그 파일
+# ===== Test Files =====
+src/test/
+
+# ===== Logs =====
 *.log
 logs/
 
-# 임시 파일
-*.tmp
-*.bak
-*~
+# ===== Database Files =====
+*.sql
+*backup*
+*.db
 
-# OS 관련
-.DS_Store
-Thumbs.db
-
-# Node.js (프론트엔드 관련, 있다면)
-node_modules/
-npm-debug.log
-
-# 문서 및 기타
+# ===== Documentation =====
 docs/
 *.md
 !README.md
 
-# 테스트 결과물
-coverage/
-test-results/
+# ===== Deployment Scripts =====
+deploy-*.sh
+setup-*.sh
+scripts/
+
+# ===== Legacy & Backups =====
+legacy/
+Dockerfile.*
+*.dockerfile
+
+# ===== AI Agent & IDE Memories =====
+.serena/
+.claude/
+.mcp.json
+AGENTS.md
+CLAUDE.md
+
+# ===== OS & Editor Junk =====
+.DS_Store
+**/.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
