@@ -1,8 +1,9 @@
 name: Deploy
 
 on:
-  push:
+  pull_request:
     branches: [deploy]
+    types: [closed]
 
 env:
   REGISTRY: ${{ secrets.REGISTRY_URL }}
@@ -11,6 +12,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout
