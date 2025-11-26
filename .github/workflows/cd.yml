@@ -85,8 +85,15 @@ jobs:
             export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
 
             cd /home/ubuntu/app
+
+            # 기존 컨테이너 정리
+            echo "기존 컨테이너 정리 중..."
+            docker compose down --remove-orphans || true
+
+            # 새 이미지 배포
+            echo "새 이미지 배포 중..."
             docker compose pull
-            docker compose up -d --force-recreate
+            docker compose up -d
 
             i=1
             while [ $i -le 60 ]; do
