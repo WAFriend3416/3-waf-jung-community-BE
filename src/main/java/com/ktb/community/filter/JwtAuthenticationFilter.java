@@ -39,12 +39,13 @@ public class JwtAuthenticationFilter implements Filter {
             "/auth/login",
             "/auth/logout",     // RT 쿠키만 사용 (AT 불필요)
             "/auth/refresh_token",
+            "/auth/guest-token",  // Guest Token 발급 (회원가입용)
             "/users/signup",
             "/users",          // 회원가입 alias
             "/terms",
             "/privacy",
             "/stats",          // 통계 API
-            "/health"          // ALB/CD 헬스체크
+            "/health"          // ALB Target Group 헬스 체크
     );
 
     @Override
