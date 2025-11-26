@@ -95,17 +95,22 @@ jobs:
             docker compose pull
             docker compose up -d
 
-            # 헬스체크
             echo "헬스체크 중..."
+            HEALTH_OK=false
             for i in $(seq 1 180); do
               if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
                 echo "헬스체크 성공! (${i}초)"
-                exit 0
+                HEALTH_OK=true
+                break
               fi
               sleep 1
             done
 
-            echo "헬스체크 실패"
-            docker compose logs --tail 30
-            exit 1
+            if [ "$HEALTH_OK" = "true" ]; then
+              echo "배포 완료"
+            else
+              echo "헬스체크 실패"
+              docker compose logs --tail 30
+              false
+            fi
           ENDSSH
