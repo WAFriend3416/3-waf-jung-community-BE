@@ -1,7 +1,7 @@
 services:
   backend:
     image: ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG:-latest}
-    container_name: community-backend
+    container_name: community-be
     ports:
       - "8080:8080"
     environment:
