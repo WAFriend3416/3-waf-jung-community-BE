@@ -55,5 +55,6 @@ docs/legacy/
 scripts/check_password.sql
 
 # Application logs
+legacy/
 logs/
 *.log
