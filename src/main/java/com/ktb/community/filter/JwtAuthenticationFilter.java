@@ -120,7 +120,13 @@ public class JwtAuthenticationFilter implements Filter {
             return true;
         }
 
-        // 2. GET 요청 공개 (단, /posts/users/me/likes는 인증 필요)
+        // 2. 정적 리소스 (CSS, JS, favicon 등)
+        if (uri.startsWith("/css/") || uri.startsWith("/js/") || 
+            uri.equals("/favicon.ico") || uri.startsWith("/images/")) {
+            return true;
+        }
+
+        // 3. GET 요청 공개 (단, /posts/users/me/likes는 인증 필요)
         if (HttpMethod.GET.matches(method)) {
             if (uri.equals("/posts/users/me/likes")) {
                 return false;  // 인증 필요

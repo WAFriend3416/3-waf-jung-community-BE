@@ -54,4 +54,6 @@ docs/legacy/
 # Temporary scripts
 scripts/check_password.sql
 
-legacy
+# Application logs
+logs/
+*.log

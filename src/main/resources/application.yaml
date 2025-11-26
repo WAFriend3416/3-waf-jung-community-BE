@@ -38,9 +38,15 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-  
+
+  file:
+    name: logs/application.log  # 로그 파일 경로 (프로젝트 루트/logs/)
+    max-size: 10MB              # 파일당 최대 크기
+    max-history: 30             # 보관 기간 (일)
+
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 # JWT 설정
 jwt:
@@ -49,11 +55,11 @@ jwt:
   refresh-token-validity: 604800000  # 7일 (밀리초)
 
 # AWS S3 설정 (Phase 3.5+)
-# ProfileCredentialsProvider: ~/.aws/credentials 프로필 사용
-# - 로컬 개발: dev 프로필 (AWS_PROFILE 환경변수 또는 기본값)
-# - 배포 환경: 환경변수로 프로필 지정 가능
+# DefaultCredentialsProvider: IAM Role 자동 인식
+# - 로컬 개발: ~/.aws/credentials 프로필 자동 인식
+# - EC2 배포: IAM Instance Profile 자동 인식
+# - 자동 갱신: AWS SDK에서 자동 처리
 aws:
-  profile: ${AWS_PROFILE:dev}
   s3:
     bucket: ${AWS_S3_BUCKET:ktb-3-community-images-dev}
     region: ${AWS_REGION:ap-northeast-2}
@@ -64,3 +70,4 @@ frontend:
 
 server:
   port: 8080
+  address: 0.0.0.0  # 모든 네트워크 인터페이스에서 수신 (localhost, private IP, public IP)

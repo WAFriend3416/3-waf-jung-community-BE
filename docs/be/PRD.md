@@ -73,10 +73,15 @@
 ---
 
 #### FR-USER-002: 사용자 프로필 수정 (P0)
-**입력**: nickname(선택,10자), profile_image(선택, File)  
+**입력**: nickname(선택,10자), profile_image(선택, File), removeImage(선택, Boolean)  
 **요청 형식**: multipart/form-data  
 **출력**: 수정된 프로필  
 **검증**: 본인만 수정, 닉네임 중복, 이미지 형식(JPG/PNG/GIF), 파일 크기(최대 5MB)  
+**이미지 처리**:
+- profileImage 제공: 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
+- removeImage: true - 기존 이미지 제거 (TTL 1시간 후 배치 삭제)
+- 둘 다 없음: 이미지 유지
+- **주의**: removeImage와 profileImage 동시 전달 시 profileImage가 우선 적용됨  
 **에러**: 403(권한 없음), 409(닉네임 중복), 413(파일 크기 초과), 400(유효하지 않은 파일 형식)
 
 ---
@@ -386,3 +391,4 @@
 | 2025-10-04 | 1.1 | 최적화 버전 (참조 기반, LLD 섹션 참조 수정, API 스펙 일치) |
 | 2025-10-10 | 1.2 | Phase 3 대비 문서 정합성 개선 (이미지 업로드, Rate Limiting 키 방식 반영) |
 | 2025-10-22 | 1.3 | 중복 제거 및 참조 최적화 (기술 스택, 비밀번호, Rate Limiting, 페이지네이션, 동시성, 이미지 업로드) |
+| 2025-11-03 | 1.4 | FR-USER-002 removeImage 파라미터 추가 (이미지 제거 기능 문서화) |

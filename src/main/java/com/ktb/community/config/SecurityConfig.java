@@ -46,8 +46,25 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl));
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH","PUT", "DELETE", "OPTIONS"));
+        
+        // 다중 origin 지원 (개발 + EC2)
+        List<String> allowedOrigins = new java.util.ArrayList<>();
+        allowedOrigins.add(frontendUrl);  // 기본 URL (포트 포함)
+        
+        // 포트 제거 버전 추가 (iptables 포트 포워딩 대응)
+        String baseUrl = frontendUrl.replaceAll(":\\d+$", "");
+        if (!baseUrl.equals(frontendUrl)) {
+            allowedOrigins.add(baseUrl);
+        }
+        
+        // localhost 개발 환경 추가 (EC2 배포 시에도 로컬 테스트 가능)
+        if (!frontendUrl.contains("localhost")) {
+            allowedOrigins.add("http://localhost:3000");
+            allowedOrigins.add("http://localhost");
+        }
+        
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
