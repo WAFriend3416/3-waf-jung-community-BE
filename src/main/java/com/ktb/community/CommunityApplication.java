@@ -8,7 +8,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class CommunityApplication {
 
-	//CI/CD 테스트용 주석
 	public static void main(String[] args) {
 		SpringApplication.run(CommunityApplication.class, args);
 	}
