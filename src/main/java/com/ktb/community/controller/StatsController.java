@@ -39,11 +39,14 @@ public class StatsController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStats() {
-        // CI/CD 테스트용 고정값
+        long totalPosts = postRepository.countByPostStatus(PostStatus.ACTIVE);
+        long totalUsers = userRepository.countByUserStatus(UserStatus.ACTIVE);
+        long totalComments = commentRepository.countByCommentStatus(CommentStatus.ACTIVE);
+
         Map<String, Long> stats = Map.of(
-                "totalPosts", 77777L,
-                "totalUsers", 77777L,
-                "totalComments", 77777L
+                "totalPosts", totalPosts,
+                "totalUsers", totalUsers,
+                "totalComments", totalComments
         );
 
         return ResponseEntity.ok(ApiResponse.success("get_stats_success", stats));
