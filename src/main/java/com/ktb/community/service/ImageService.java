@@ -187,6 +187,7 @@ public class ImageService {
                 .bucket(bucketName)
                 .key(s3Key)
                 .contentType(resolvedContentType)
+                .acl(ObjectCannedACL.PUBLIC_READ)  // 이미지 객체 public 설정 (다운로드 허용)
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
