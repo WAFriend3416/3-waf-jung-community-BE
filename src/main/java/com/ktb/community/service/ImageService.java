@@ -2,6 +2,7 @@ package com.ktb.community.service;
 
 import com.ktb.community.dto.request.ImageMetadataRequest;
 import com.ktb.community.dto.response.ImageResponse;
+import com.ktb.community.dto.response.PresignedUrlResponse;
 import com.ktb.community.entity.Image;
 import com.ktb.community.enums.ErrorCode;
 import com.ktb.community.exception.BusinessException;
@@ -18,8 +19,12 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -32,6 +37,7 @@ import java.time.LocalDateTime;
 public class ImageService {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final ImageRepository imageRepository;
 
     @Value("${aws.s3.bucket}")
@@ -143,5 +149,73 @@ public class ImageService {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, 
                 "S3 upload error: " + e.getMessage());
         }
+    }
+
+
+    /**
+     * Presigned URL 발급 (클라이언트 직접 S3 업로드용)
+     * API.md Section 4.3 참조
+     *
+     * 플로우:
+     * 1. 확장자 검증
+     * 2. S3 Key 생성
+     * 3. Presigned URL 생성 (15분 유효)
+     * 4. DB에 Image 레코드 사전 등록 (expires_at = 1시간)
+     * 5. PresignedUrlResponse 반환
+     *
+     * @param filename 원본 파일명 (확장자 필수)
+     * @param contentType MIME type (선택, null이면 확장자 기반 추론)
+     * @return Presigned URL 응답 (imageId, uploadUrl, s3Key, expiresAt)
+     */
+    @Transactional
+    public PresignedUrlResponse generatePresignedUrl(String filename, String contentType) {
+        log.debug("[Image] Presigned URL 발급 시작: filename={}, contentType={}", filename, contentType);
+
+        // 1. 확장자 검증 (.jpg, .jpeg, .png, .gif)
+        FileValidator.validateExtension(filename);
+
+        // 2. Content-Type 추론 (전달되지 않은 경우)
+        String resolvedContentType = (contentType != null && !contentType.isBlank())
+                ? contentType
+                : FileValidator.inferContentType(filename);
+
+        // 3. S3 Key 생성 (images/yyyy/MM/dd/{UUID}.ext)
+        String s3Key = S3KeyGenerator.generateKey(filename);
+
+        // 4. Presigned URL 생성 (15분 유효)
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .contentType(resolvedContentType)
+                .build();
+
+        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .putObjectRequest(putObjectRequest)
+                .build();
+
+        PresignedPutObjectRequest presignedRequest = s3Presigner.presignPutObject(presignRequest);
+        String uploadUrl = presignedRequest.url().toString();
+
+        // 5. DB에 Image 레코드 사전 등록 (expires_at = 1시간 후)
+        //    - 클라이언트가 업로드 완료 후 Post/User에 연결하면 clearExpiresAt() 호출
+        //    - 미연결 시 ImageCleanupBatchService가 정리
+        String imageUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, s3Key);
+        Image image = Image.builder()
+                .imageUrl(imageUrl)
+                .fileSize(0)  // 클라이언트 직접 업로드이므로 파일 크기 미확인
+                .originalFilename(filename)
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+
+        Image savedImage = imageRepository.save(image);
+        log.info("[Image] Presigned URL 발급 완료: imageId={}, s3Key={}", savedImage.getImageId(), s3Key);
+
+        return PresignedUrlResponse.of(
+                savedImage.getImageId(),
+                uploadUrl,
+                s3Key,
+                savedImage.getExpiresAt()
+        );
     }
 }
