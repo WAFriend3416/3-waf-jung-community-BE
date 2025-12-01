@@ -4,11 +4,13 @@ import com.ktb.community.config.RateLimit;
 import com.ktb.community.dto.ApiResponse;
 import com.ktb.community.dto.request.ImageMetadataRequest;
 import com.ktb.community.dto.response.ImageResponse;
+import com.ktb.community.dto.response.PresignedUrlResponse;
 import com.ktb.community.service.ImageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -67,6 +69,37 @@ public class ImageController {
         ApiResponse<ImageResponse> response = ApiResponse.success(
                 "register_image_metadata_success",
                 imageResponse
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+
+    /**
+     * Presigned URL 발급 (API.md Section 4.3)
+     * GET /images/presigned-url
+     * Authorization: Bearer {access_token | guest_token}
+     * Tier 2: 중간 제한 (10회/분)
+     *
+     * 클라이언트가 S3에 직접 업로드할 수 있는 Presigned URL 발급
+     * - 대용량 파일 업로드에 효율적 (서버 바이패스)
+     * - 업로드 후 imageId로 Post/User에 연결
+     *
+     * @param filename 원본 파일명 (필수, 확장자 포함)
+     * @param contentType MIME type (선택, 미전달 시 확장자 기반 추론)
+     * @return Presigned URL 정보 (imageId, uploadUrl, s3Key, expiresAt)
+     */
+    @GetMapping("/presigned-url")
+    @RateLimit(requestsPerMinute = 10)
+    public ResponseEntity<ApiResponse<PresignedUrlResponse>> getPresignedUrl(
+            @RequestParam("filename") String filename,
+            @RequestParam(value = "content_type", required = false) String contentType) {
+
+        PresignedUrlResponse presignedUrlResponse = imageService.generatePresignedUrl(filename, contentType);
+
+        ApiResponse<PresignedUrlResponse> response = ApiResponse.success(
+                "presigned_url_generated",
+                presignedUrlResponse
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

@@ -1,8 +1,13 @@
+---
+name: product-requirements
+description: 기능 요구사항(FR) 및 비기능 요구사항(NFR) 정의. 새 기능 구현 전 FR-XXX-NNN 코드로 비즈니스 요구사항 확인, 우선순위(P0/P1) 파악 시 참조.
+---
+
 # PRD.md - Product Requirements Document
 ## 문서 정보
 | 항목 | 내용 |
 |------|------|
-| 프로젝트명 | KTB Community Platform |
+| 프로젝트명 | DC2 Community Platform |
 | 버전 | 1.1 |
 | 문서 유형 | Product Requirements Document |
 ---
@@ -28,7 +33,7 @@
 
 **입력**: email(필수,유니크), password(필수,8-20자), nickname(필수,10자,유니크), profile_image(선택, File)
 **요청 형식**: multipart/form-data
-**출력**: Access Token(30분), Refresh Token(7일)
+**출력**: Access Token(15분), Refresh Token(7일)
 **검증**: 이메일/닉네임 중복, 비밀번호 정책(대/소/특수문자 각 1개+), 이미지 형식(JPG/PNG/GIF), 파일 크기(최대 5MB)
 **에러**: 409(중복), 400(유효성), 413(파일 크기 초과), 400(유효하지 않은 파일 형식)
 
@@ -249,9 +254,9 @@
 
 **NFR-SEC-001: 인증 및 권한**
 - JWT 기반 토큰 인증
-- Access Token: 30분, Refresh Token: 7일
+- Access Token: 15분, Refresh Token: 7일
 - **토큰 전달**: httpOnly Cookie (XSS 방어)
-  - access_token: HttpOnly, SameSite=Strict, Path=/, 30분
+  - access_token: HttpOnly, SameSite=Strict, Path=/, 15분
   - refresh_token: HttpOnly, SameSite=Strict, Path=/auth/refresh_token, 7일
 - **Refresh Token DB 관리**: user_tokens 테이블 (갱신/무효화)
 - **보안 강화**: JavaScript 접근 불가 (httpOnly), CSRF 방어 (SameSite=Strict)
@@ -340,7 +345,7 @@
 **NFR-MAINT-003: 문서화**
 - API 명세(**@docs/be/API.md**)
 - DB 스키마(**@docs/be/DDL.md**)
-- 개발 가이드(**@docs/CLAUDE.md**)
+- 개발 가이드(**@CLAUDE.md**)
 
 ---
 

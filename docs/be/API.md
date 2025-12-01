@@ -1,6 +1,12 @@
-# 카부캠 커뮤니티 REST API 문서
+---
+name: rest-api-spec
+description: REST API 엔드포인트 명세서. API URL, HTTP Method, 요청/응답 형식, 에러 코드 확인 시 참조. FE 연동, Postman 테스트, ALB 라우팅 이해에 활용.
+---
+
+# DC2 커뮤니티 REST API 문서
 
 ## 목차
+- [0. API 아키텍처](#0-api-아키텍처)
 - [1. 인증 (Authentication)](#1-인증-authentication)
 - [2. 사용자 (Users)](#2-사용자-users)
 - [3. 게시글 (Posts)](#3-게시글-posts)
@@ -8,6 +14,54 @@
 - [5. 댓글 (Comments)](#5-댓글-comments)
 - [6. 좋아요 (Likes)](#6-좋아요-likes)
 - [7. 공통 사양](#7-공통-사양)
+- [8. 시스템 (System)](#8-시스템-system)
+
+---
+
+## 0. API 아키텍처
+
+### ALB 경로 기반 라우팅
+
+```
+                         ┌─────────────────────────────────┐
+                         │              ALB                │
+   Client Request        │   Path-based Routing            │
+        │                │                                 │
+        ▼                │   /api/v1/* → BE (path rewrite) │
+   ┌──────────┐          │   /*        → FE                │
+   │/api/v1/  │─────────►│                                 │
+   │auth/login│          │         ┌─────────┴─────────┐   │
+   └──────────┘          │         ▼                   ▼   │
+                         │   ┌──────────┐       ┌──────────┐
+                         │   │ BE(8080) │       │ FE(3000) │
+                         │   │ /auth/   │       │ /        │
+                         │   │ login    │       │          │
+                         │   └──────────┘       └──────────┘
+                         └─────────────────────────────────┘
+```
+
+### API Base URL
+
+| 환경 | 클라이언트 호출 | ALB 변환 | BE 수신 |
+|------|----------------|----------|---------|
+| **Production** | `/api/v1/auth/login` | strip `/api/v1` | `/auth/login` |
+| **Local (직접)** | `http://localhost:8080/auth/login` | - | `/auth/login` |
+
+### 클라이언트 호출 규칙
+
+```javascript
+// Production (ALB 경유)
+const API_PREFIX = '/api/v1';
+fetch(`${API_PREFIX}/auth/login`, { ... });  // → /api/v1/auth/login
+
+// Local Development (BE 직접 호출)
+const API_BASE_URL = 'http://localhost:8080';
+fetch(`${API_BASE_URL}/auth/login`, { ... });  // → /auth/login
+```
+
+**⚠️ 중요**: 이 문서의 Endpoint는 **BE 내부 경로**입니다.
+- Production 환경에서는 `/api/v1` prefix를 추가하여 호출
+- ALB가 자동으로 prefix를 strip하여 BE로 전달
 
 ---
 
@@ -123,10 +177,47 @@ async function refreshAccessToken() {
 
 ---
 
+### 1.4 Guest Token 발급
+**Endpoint:** `GET /auth/guest-token`
+
+**용도:** 회원가입 시 프로필 이미지 업로드를 위한 임시 토큰
+
+**응답:**
+- 200: `guest_token_issued` → Guest Token (String)
+- 500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "guest_token_issued",
+  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
+
+**토큰 특성:**
+| 항목 | 값 |
+|------|-----|
+| 유효기간 | 5분 |
+| subject | "0" (게스트 전용 ID) |
+| role | GUEST |
+| Refresh Token | 없음 (일회용) |
+
+**사용 시나리오:**
+1. 회원가입 페이지 로드 시 자동 발급
+2. 프로필 이미지 업로드 (Lambda 연동)
+3. 회원가입 완료 후 정식 AT/RT로 교체
+
+**Lambda 검증:**
+- Lambda는 `role: GUEST` 또는 `userId == 0` 체크로 회원가입 업로드 판별
+- 미사용 이미지는 TTL 1시간 후 자동 삭제
+
+---
+
 ## 2. 사용자 (Users)
 
 ### 2.1 회원가입
-**Endpoint:** `POST /users/signup` or `POST /users`
+**Endpoint:** `POST /users/signup`
 
 **Content-Type:** `multipart/form-data`
 
@@ -468,6 +559,94 @@ return PostResponse.from(post);
 
 ---
 
+### 4.2 이미지 메타데이터 등록 (Lambda 연동)
+**Endpoint:** `POST /images/metadata`
+
+**헤더:** Authorization: Bearer {access_token}
+
+**Request:**
+```json
+{
+  "imageUrl": "https://s3.amazonaws.com/bucket/...",
+  "fileSize": 102400,
+  "originalFilename": "profile.jpg"
+}
+```
+
+**필수:** imageUrl(String)
+**선택:** fileSize(Integer, 양수), originalFilename(String)
+
+**용도:** Lambda에서 S3에 이미지 업로드 후 메타데이터 등록
+
+**응답:**
+- 201: `register_image_metadata_success` → imageId, imageUrl 반환
+- 400: COMMON-001 (Invalid input)
+- 401/500: [공통 에러 코드](#응답-코드) 참조
+
+**Rate Limit:** 10회/분 (Tier 2)
+
+---
+
+### 4.3 Presigned URL 발급
+**Endpoint:** `GET /images/presigned-url`
+
+**헤더:** Authorization: Bearer {access_token | guest_token}
+
+**Query Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|---------|------|------|------|
+| filename | String | ✅ | 원본 파일명 (확장자 포함) |
+| content_type | String | ❌ | MIME type (기본: 확장자 기반 추론) |
+
+**제약:**
+- 허용 확장자: .jpg, .jpeg, .png, .gif
+- Presigned URL 유효기간: 15분
+- 이미지 TTL: 1시간 (연결 시 해제)
+
+**응답:**
+- 201: `presigned_url_generated`
+- 400: IMAGE-003 (Invalid file type), COMMON-001 (Filename required)
+- 401/500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "presigned_url_generated",
+  "data": {
+    "imageId": 123,
+    "uploadUrl": "https://bucket.s3.ap-northeast-2.amazonaws.com/images/2025/12/01/uuid.jpg?X-Amz-Algorithm=...",
+    "s3Key": "images/2025/12/01/uuid.jpg",
+    "expiresAt": "2025-12-01T15:30:00"
+  },
+  "timestamp": "2025-12-01T15:15:00"
+}
+```
+
+**클라이언트 사용법:**
+```javascript
+// 1. Presigned URL 발급
+const { imageId, uploadUrl } = await fetch('/images/presigned-url?filename=profile.jpg', {
+  headers: { Authorization: `Bearer ${token}` }
+}).then(r => r.json()).then(d => d.data);
+
+// 2. S3 직접 업로드 (PUT)
+await fetch(uploadUrl, {
+  method: 'PUT',
+  body: imageFile,
+  headers: { 'Content-Type': 'image/jpeg' }
+});
+
+// 3. 회원가입/게시글 작성 시 imageId 사용
+await fetch('/users/signup', {
+  method: 'POST',
+  body: JSON.stringify({ email, password, nickname, imageId })
+});
+```
+
+**Rate Limit:** 10회/분 (Tier 2)
+
+---
+
 ## 5. 댓글 (Comments)
 
 **댓글 객체:** `{ commentId, content, createdAt, updatedAt, author: { userId, nickname, profileImage } }`
@@ -616,11 +795,13 @@ return PostResponse.from(post);
 
 **프론트엔드 구현 예시:**
 ```javascript
-const API_BASE_URL = 'http://localhost:8080';
+// Production: ALB 경유 (API_BASE_URL은 빈 문자열 또는 도메인)
+const API_BASE_URL = window.APP_CONFIG?.API_BASE_URL || '';
+const API_PREFIX = window.APP_CONFIG?.API_PREFIX || '/api/v1';
 let accessToken = null;  // AT는 메모리 저장
 
 // 로그인
-const response = await fetch(`${API_BASE_URL}/auth/login`, {
+const response = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/login`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   credentials: 'include',  // RT 쿠키 받기
@@ -634,26 +815,36 @@ if (response.ok) {
 }
 
 // API 요청 (AT를 Authorization 헤더로 전송)
-const posts = await fetch(`${API_BASE_URL}/posts`, {
+const posts = await fetch(`${API_BASE_URL}${API_PREFIX}/posts`, {
   headers: {
     'Authorization': `Bearer ${accessToken}`  // AT 전송
   },
-  credentials: 'include'  // RT 쿠키는 사용 안함 (갱신 시만 사용)
+  credentials: 'include'
 });
 
 // AT 만료 시 자동 갱신
 if (response.status === 401) {
-  const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh_token`, {
+  const refreshResponse = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/refresh_token`, {
     method: 'POST',
     credentials: 'include'  // RT 쿠키로 자동 전송
   });
-  
+
   if (refreshResponse.ok) {
     const data = await refreshResponse.json();
     accessToken = data.data.accessToken;  // 새 AT 저장
     // 원래 요청 재시도
   }
 }
+```
+
+**Local Development (BE 직접 호출):**
+```javascript
+// Local: BE 직접 호출 시 API_PREFIX 없이 사용
+const API_BASE_URL = 'http://localhost:8080';
+const API_PREFIX = '';  // 로컬에서는 빈 문자열
+
+fetch(`${API_BASE_URL}${API_PREFIX}/auth/login`, { ... });
+// → http://localhost:8080/auth/login
 ```
 
 **CSRF 토큰 처리 (POST/PATCH/DELETE):**
@@ -764,7 +955,7 @@ offset: 시작 위치 (0부터), limit: 한 번에 가져올 개수
 - COMMON-004: Too many requests (요청 횟수 초과)
 - COMMON-999: Server error (서버 내부 오류)
 
-**전체 에러 코드:** `Users/jsh/ideaProject/community/src/main/java/com/ktb/community/enums/ErrorCode.java` 참조 (28개)
+**전체 에러 코드:** `src/main/java/com/ktb/community/enums/ErrorCode.java` 참조 (28개)
 
 ### 응답 예시
 
@@ -790,3 +981,56 @@ offset: 시작 위치 (0부터), limit: 한 번에 가져올 개수
   "timestamp": "2025-10-01T14:30:00"
 }
 ```
+
+---
+
+## 8. 시스템 (System)
+
+### 8.1 Health Check
+**Endpoint:** `GET /health`
+
+**용도:** ALB Target Group Health Check
+
+**응답:**
+- 200: `{ "status": "UP", "timestamp": "..." }`
+
+**응답 예시:**
+```json
+{
+  "status": "UP",
+  "timestamp": "2025-10-21T10:00:00.123456"
+}
+```
+
+**참고:** 인증 불필요, Rate Limit 없음
+
+---
+
+### 8.2 플랫폼 통계
+**Endpoint:** `GET /stats`
+
+**용도:** 랜딩페이지용 플랫폼 통계 제공
+
+**응답:**
+- 200: `get_stats_success` → 통계 데이터
+- 500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "get_stats_success",
+  "data": {
+    "totalPosts": 1234,
+    "totalUsers": 567,
+    "totalComments": 8901
+  },
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
+
+**데이터 설명:**
+- `totalPosts`: ACTIVE 상태 게시글 수
+- `totalUsers`: ACTIVE 상태 사용자 수
+- `totalComments`: ACTIVE 상태 댓글 수
+
+**참고:** 인증 불필요, Rate Limit 없음

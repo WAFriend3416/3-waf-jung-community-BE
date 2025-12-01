@@ -123,11 +123,17 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 2. 정적 리소스 (CSS, JS, favicon 등)
         if (uri.startsWith("/css/") || uri.startsWith("/js/") || 
-            uri.equals("/favicon.ico") || uri.startsWith("/images/")) {
+            uri.equals("/favicon.ico")) {
             return true;
         }
 
-        // 3. GET 요청 공개 (단, /posts/users/me/likes는 인증 필요)
+        // 3. /images/* 경로 (POST /images, POST /images/metadata는 인증 불필요)
+        //    단, GET /images/presigned-url은 인증 필요 (토큰 발급이므로)
+        if (uri.startsWith("/images/") && !uri.equals("/images/presigned-url")) {
+            return true;
+        }
+
+        // 4. GET 요청 공개 (단, /posts/users/me/likes는 인증 필요)
         if (HttpMethod.GET.matches(method)) {
             if (uri.equals("/posts/users/me/likes")) {
                 return false;  // 인증 필요

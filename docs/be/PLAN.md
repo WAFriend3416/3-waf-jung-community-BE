@@ -1,8 +1,13 @@
-# PLAN.md - KTB Community 프로젝트 구현 계획
+---
+name: implementation-plan
+description: Phase별 구현 로드맵 및 진행 상황. 현재 Phase 확인, 체크리스트 업데이트, FR-Phase 매핑 파악 시 참조.
+---
+
+# PLAN.md - DC2 Community 프로젝트 구현 계획
 
 ## 프로젝트 개요
 
-**프로젝트명**: KTB Community Platform
+**프로젝트명**: DC2 Community Platform
 **기술 스택 및 아키텍처**: **@docs/be/LLD.md Section 1-2** 참조
 
 ---
@@ -13,7 +18,6 @@
 **Phase 2 완료** ✅ (Week 2-3)
 **Phase 3 완료** ✅ (Week 4-5)
 **Phase 3.5 완료** ✅ (S3 이미지 업로드)
-**Phase 3.6 완료** ✅ (회원가입/프로필 Multipart 전환 + P0/P1 수정)
 
 ---
 
@@ -25,7 +29,7 @@
 | Phase 2 | 2-3 | 인증/사용자 | AUTH-001~004, USER-001~004 | ✅ 완료 |
 | Phase 3 | 4-5 | 게시글/댓글/좋아요 | POST-001~005, COMMENT-001~004, LIKE-001~003 | ✅ 완료 |
 | Phase 3.5 | 5 | 이미지 업로드 (S3) | IMAGE-001, IMAGE-003 | ✅ 완료 |
-| Phase 3.6 | 5 | Multipart 전환 + P0/P1 수정 | AUTH-001, USER-002 | ✅ 완료 |
+| Phase 3.7 | - | Presigned URL 추가 | IMAGE-003 (하이브리드) | ✅ 완료 |
 | Phase 4 | 6 | 통계 및 배치 | IMAGE-002 (고아 이미지) | ✅ 완료 |
 | Phase 5 | 7 | 테스트/문서 + 버그 수정 | detached entity 해결 | ⏳ 진행 예정 |
 | Phase 6 | 8+ | Redis 도입 (조건부) | 성능 최적화 | ⏸️ 조건 대기 |
@@ -251,6 +255,58 @@
 - [x] 모든 단위 테스트 통과 (102 tests, 0 failures, 100% success)
 
 **참조**: **@docs/be/LLD.md Section 7.5** (2가지 업로드 패턴), **@docs/be/API.md Section 2.1, 2.3**
+
+---
+
+## Phase 3.7: S3 Presigned URL 이미지 업로드 ✅ 완료
+
+**목표**: 클라이언트 직접 S3 업로드로 서버 부하 감소 (하이브리드 방식)
+
+### FR 매핑
+
+| FR 코드 | 기능 | 변경 내용 |
+|---------|------|-----------|
+| FR-IMAGE-003 | 이미지 업로드 | Multipart 유지 + Presigned URL 추가 |
+
+### 설계 결정
+
+| 항목 | 결정 | 이유 |
+|------|------|------|
+| Presigned URL 범위 | 업로드만 (PUT) | 다운로드는 공개 URL 유지 |
+| 기존 Multipart API | 병행 유지 | 하위 호환성, 소규모 이미지 |
+| 파일 크기 검증 | 클라이언트만 | 서버 부하 최소화 |
+| 확정 API | 불필요 | imageId 사전 생성 |
+| URL 유효기간 | 15분 | 업로드 충분 + 남용 방지 |
+| 이미지 TTL | 1시간 | 기존 정책 유지 |
+
+### 체크리스트
+
+**문서화 (✅ 완료):**
+- [x] API.md Section 4.3 - Presigned URL 발급 엔드포인트
+- [x] LLD.md Section 7.5 - 패턴 4 Presigned URL 추가
+- [x] LLD.md Section 6.5 - Rate Limit 추가
+- [x] API-SUMMARY.md - 엔드포인트 추가
+- [x] LLD-SUMMARY.md - 5가지 패턴 업데이트
+
+**구현 (✅ 완료):**
+- [x] S3Config.java - S3Presigner Bean 추가
+- [x] PresignedUrlResponse.java - 응답 DTO 생성
+- [x] ImageService.generatePresignedUrl() - 메서드 구현
+- [x] ImageController.getPresignedUrl() - 엔드포인트 추가
+- [x] JwtAuthenticationFilter - /images/presigned-url 인증 필수
+
+**테스트 (✅ 완료):**
+- [x] ImageService 단위 테스트 (generatePresignedUrl, 7개 테스트 케이스)
+- [x] 확장자 검증 테스트 (.jpg, .jpeg, .png, .gif)
+- [x] Rate Limit 테스트 (10회/분)
+
+### 완료 조건
+- [x] GET /images/presigned-url API 작동
+- [x] 클라이언트 S3 직접 업로드 성공
+- [x] 기존 POST /images API 정상 작동 (하위 호환성)
+- [x] 모든 단위 테스트 통과
+
+**참조**: **@docs/be/LLD.md Section 7.5** (패턴 4), **@docs/be/API.md Section 4.3**
 
 ---
 

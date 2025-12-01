@@ -1,3 +1,8 @@
+---
+name: database-schema
+description: MySQL 테이블 DDL 및 인덱스 정의. 컬럼 타입, FK 관계, 제약조건, JPA Entity 매핑 확인 시 참조. 8개 테이블 스키마 포함.
+---
+
 -- 이미지 저장 테이블
 CREATE TABLE images (
     image_id BIGINT AUTO_INCREMENT,
