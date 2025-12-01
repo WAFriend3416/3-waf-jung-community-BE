@@ -49,30 +49,68 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}
 
-  # Jenkins CD 트리거 - deploy job을 Jenkins로 이관
-  trigger-jenkins:
+  deploy:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Trigger Jenkins Deploy
+      - name: Setup SSH
         run: |
-          echo "Jenkins 배포 트리거 시작: ${{ needs.build.outputs.image_tag }}"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-          # Jenkins Generic Webhook Trigger 호출
-          response=$(curl -s -w "\n%{http_code}" -X POST \
-            "${{ secrets.JENKINS_URL }}/generic-webhook-trigger/invoke?token=${{ secrets.JENKINS_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"IMAGE_TAG": "${{ needs.build.outputs.image_tag }}", "REGISTRY": "${{ secrets.REGISTRY_URL }}"}')
+      - name: Deploy to EC2
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          ssh ubuntu@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            set -e
+            command -v docker >/dev/null 2>&1 || exit 1
+            docker compose version >/dev/null 2>&1 || exit 1
+            command -v aws >/dev/null 2>&1 || exit 1
 
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d')
+            AWS_REGION="ap-northeast-2"
+            get_param() { aws ssm get-parameter --name "$1" --with-decryption --query 'Parameter.Value' --output text --region "$AWS_REGION"; }
 
-          echo "Jenkins 응답: $body"
-          echo "HTTP 상태 코드: $http_code"
+            export DB_URL=$(get_param "/community/week10/DB_URL")
+            export DB_USERNAME=$(get_param "/community/week10/DB_USERNAME")
+            export DB_PASSWORD=$(get_param "/community/week10/DB_PASSWORD")
+            export JWT_SECRET=$(get_param "/community/JWT_SECRET")
+            export AWS_S3_BUCKET=$(get_param "/community/AWS_S3_BUCKET")
+            export AWS_REGION=$(get_param "/community/AWS_REGION")
+            export FRONTEND_URL=$(get_param "/community/FRONTEND_URL")
+            export REGISTRY=${{ secrets.REGISTRY_URL }}
+            export IMAGE_NAME=community-be
+            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
 
-          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
-            echo "Jenkins 배포 트리거 성공!"
-          else
-            echo "Jenkins 배포 트리거 실패!"
-            exit 1
-          fi
+            cd /home/ubuntu/app
+
+            # 기존 컨테이너 정리
+            echo "기존 컨테이너 정리 중..."
+            docker compose down --remove-orphans || true
+
+            # 새 이미지 배포
+            echo "새 이미지 배포 중..."
+            docker compose pull
+            docker compose up -d
+
+            echo "헬스체크 중..."
+            HEALTH_OK=false
+            for i in $(seq 1 180); do
+              if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
+                echo "헬스체크 성공! (${i}초)"
+                HEALTH_OK=true
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$HEALTH_OK" = "true" ]; then
+              echo "배포 완료"
+            else
+              echo "헬스체크 실패"
+              docker compose logs --tail 30
+              false
+            fi
+          ENDSSH
