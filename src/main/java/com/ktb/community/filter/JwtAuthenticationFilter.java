@@ -116,31 +116,34 @@ public class JwtAuthenticationFilter implements Filter {
      * 공개 엔드포인트 판단
      */
     private boolean isPublicEndpoint(String uri, String method) {
+        // ALB 경로 기반 라우팅: /api/v1/* 접두사 제거 (있는 경우)
+        String normalizedUri = uri.startsWith("/api/v1") ? uri.substring(7) : uri;
+
         // 1. 완전 공개 경로
-        if (PUBLIC_PATHS.contains(uri)) {
+        if (PUBLIC_PATHS.contains(normalizedUri)) {
             return true;
         }
 
         // 2. 정적 리소스 (CSS, JS, favicon 등)
-        if (uri.startsWith("/css/") || uri.startsWith("/js/") || 
-            uri.equals("/favicon.ico")) {
+        if (normalizedUri.startsWith("/css/") || normalizedUri.startsWith("/js/") ||
+            normalizedUri.equals("/favicon.ico")) {
             return true;
         }
 
         // 3. /images/* 경로 (POST /images, POST /images/metadata는 인증 불필요)
         //    단, GET /images/presigned-url은 인증 필요 (토큰 발급이므로)
-        if (uri.startsWith("/images/") && !uri.equals("/images/presigned-url")) {
+        if (normalizedUri.startsWith("/images/") && !normalizedUri.equals("/images/presigned-url")) {
             return true;
         }
 
         // 4. GET 요청 공개 (단, /posts/users/me/likes는 인증 필요)
         if (HttpMethod.GET.matches(method)) {
-            if (uri.equals("/posts/users/me/likes")) {
+            if (normalizedUri.equals("/posts/users/me/likes")) {
                 return false;  // 인증 필요
             }
 
             // /posts, /posts/{id}, /posts/{id}/comments, /users/{id} 공개
-            if (uri.startsWith("/posts") || uri.startsWith("/users/")) {
+            if (normalizedUri.startsWith("/posts") || normalizedUri.startsWith("/users/")) {
                 return true;
             }
         }
