@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ${{ secrets.REGISTRY_URL_ECR }}
-  IMAGE_NAME: ktb-personal
+  IMAGE_NAME: ktb-personal-be
   AWS_REGION: ap-northeast-2
 
 jobs:
@@ -92,7 +92,7 @@ jobs:
             export AWS_REGION=$(get_param "/community/AWS_REGION")
             export FRONTEND_URL=$(get_param "/community/FRONTEND_URL")
             export REGISTRY=${{ secrets.REGISTRY_URL_ECR }}
-            export IMAGE_NAME=ktb-personal
+            export IMAGE_NAME=ktb-personal-be
             export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
 
             cd /home/ubuntu/app
