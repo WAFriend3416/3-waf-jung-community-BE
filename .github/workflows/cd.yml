@@ -7,7 +7,8 @@ on:
 
 env:
   REGISTRY: ${{ secrets.REGISTRY_URL_ECR }}
-  IMAGE_NAME: ktb-personal-be
+  IMAGE_NAME: ktb-personal
+  IMAGE_PREFIX: be
   AWS_REGION: ap-northeast-2
 
 jobs:
@@ -60,8 +61,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_PREFIX }}-latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_PREFIX }}-${{ steps.tag.outputs.TAG }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -95,8 +96,8 @@ jobs:
             export AWS_REGION=$(get_param "/community/AWS_REGION")
             export FRONTEND_URL=$(get_param "/community/FRONTEND_URL")
             export REGISTRY=${{ secrets.REGISTRY_URL_ECR }}
-            export IMAGE_NAME=ktb-personal-be
-            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
+            export IMAGE_NAME=ktb-personal
+            export IMAGE_TAG=be-${{ needs.build.outputs.image_tag }}
 
             cd /home/ubuntu/app
 
