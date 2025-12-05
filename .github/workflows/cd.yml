@@ -101,6 +101,10 @@ jobs:
 
             cd /home/ubuntu/app
 
+            # ECR 로그인
+            echo "ECR 로그인 중..."
+            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
+
             # 기존 컨테이너 정리
             echo "기존 컨테이너 정리 중..."
             docker compose down --remove-orphans || true
