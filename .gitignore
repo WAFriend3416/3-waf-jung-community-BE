@@ -43,9 +43,7 @@ out/
 ### AI AGENET ###
 .serena/
 .claude/
-CLAUDE.md
 AGENTS.md
-.mcp.json
 docs/backup/
 docs/legacy/
 # Environment variables
