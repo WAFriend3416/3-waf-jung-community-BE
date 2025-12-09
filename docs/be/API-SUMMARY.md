@@ -33,17 +33,16 @@ Client: /api/v1/auth/login → ALB strip → BE: /auth/login
 | 5 | 댓글 | /posts/{id}/comments | GET, POST |
 | 5 | 댓글 | /posts/{id}/comments/{cid} | PATCH, DELETE |
 | 6 | 좋아요 | /posts/{id}/like | POST, DELETE |
-| 6 | 좋아요 | /posts/users/me/likes | GET |
 | 8 | 시스템 | /health | GET |
 | 8 | 시스템 | /stats | GET |
 
 ## 인증 방식
 
-| 토큰 | 전달 | 저장 | 유효기간 |
-|------|------|------|----------|
-| Access Token | 응답 body → Authorization header | JS 메모리 | 15분 |
+| 토큰 | 전달 | 저장      | 유효기간 |
+|------|------|---------|----------|
+| Access Token | 응답 body → Authorization header | 로컬 스토리지 | 15분 |
 | Refresh Token | httpOnly Cookie | 브라우저 자동 | 7일 |
-| Guest Token | 응답 body | 임시 | 5분 |
+| Guest Token | 응답 body | 임시      | 5분 |
 
 ## 페이지네이션
 
