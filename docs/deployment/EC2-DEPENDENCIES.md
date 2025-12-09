@@ -350,12 +350,12 @@ WantedBy=multi-user.target
 **파라미터 생성**:
 ```bash
 aws ssm put-parameter \
-  --name "/community/week10/DB_URL" \
+  --name "/community/DB_URL" \
   --value "jdbc:mysql://your-rds-endpoint:3306/community" \
   --type "String"
 
 aws ssm put-parameter \
-  --name "/community/week10/DB_PASSWORD" \
+  --name "/community/DB_PASSWORD" \
   --value "your_password" \
   --type "SecureString"  # 암호화됨
 

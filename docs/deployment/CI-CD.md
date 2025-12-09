@@ -47,7 +47,7 @@ DC2 Community 프로젝트의 지속적 통합/배포(CI/CD) 파이프라인 아
 │  ├─ Stage 1: Checkout                                            │
 │  ├─ Stage 2: Resolve Backend Targets (from ALB Target Group)     │
 │  ├─ Stage 3: Load Backend Env From SSM                           │
-│  │    └─ /community/week10/* + /community/* parameters           │
+│  │    └─ /community/* parameters (DB, JWT, S3, FE URL)           │
 │  └─ Stage 4: Deploy Backend                                      │
 │       ├─ SSH to each EC2 instance                                │
 │       └─ Execute /mnt/efs/deploy/backend/deploy-backend.sh       │
@@ -336,9 +336,9 @@ stage('Load Backend Env From SSM') {
                 script: """
                     aws ssm get-parameters \\
                         --names \\
-                            "/community/week10/DB_URL" \\
-                            "/community/week10/DB_USERNAME" \\
-                            "/community/week10/DB_PASSWORD" \\
+                            "/community/DB_URL" \\
+                            "/community/DB_USERNAME" \\
+                            "/community/DB_PASSWORD" \\
                             "/community/JWT_SECRET" \\
                             "/community/AWS_S3_BUCKET" \\
                             "/community/AWS_REGION" \\
@@ -625,9 +625,9 @@ docker compose up -d
 
 | Parameter Name | Type | 설명 |
 |----------------|------|------|
-| `/community/week10/DB_URL` | SecureString | MySQL 접속 URL |
-| `/community/week10/DB_USERNAME` | SecureString | MySQL 사용자명 |
-| `/community/week10/DB_PASSWORD` | SecureString | MySQL 비밀번호 |
+| `/community/DB_URL` | SecureString | MySQL 접속 URL |
+| `/community/DB_USERNAME` | SecureString | MySQL 사용자명 |
+| `/community/DB_PASSWORD` | SecureString | MySQL 비밀번호 |
 | `/community/JWT_SECRET` | SecureString | JWT Secret Key (256bit) |
 | `/community/AWS_S3_BUCKET` | String | S3 버킷 이름 |
 | `/community/AWS_REGION` | String | AWS 리전 |
@@ -714,7 +714,7 @@ aws ec2 describe-instances --instance-ids i-xxx --query 'Reservations[].Instance
 ```bash
 # 파라미터 존재 확인
 aws ssm get-parameters \
-  --names "/community/week10/DB_URL" "/community/JWT_SECRET" \
+  --names "/community/DB_URL" "/community/JWT_SECRET" \
   --region ap-northeast-2
 
 # Jenkins IAM Role에 SSM 읽기 권한 확인
