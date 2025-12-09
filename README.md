@@ -7,21 +7,16 @@
 
 ## 주요 기능
 
-- 게시글/댓글/좋아요 CRUD (원자적 통계 업데이트)
+- 게시글/댓글/좋아요 CRUD
 - S3 이미지 업로드 (Presigned URL)
-- Cursor/Offset 하이브리드 페이지네이션
-- Rate Limiting (Token Bucket, 3-Tier 전략)
+- Cursor/Offset 페이지네이션
+- Rate Limiting (Token Bucket)
 - JWT 기반 인증/인가 (Access Token 15분, Refresh Token 7일)
 - 고아 이미지 자동 정리 배치 (TTL 1시간)
-- ALB 경로 기반 라우팅 (/api/v1/* → Backend)
+- 좋아요 토글 (Optimistic Update)
 
 ## 데모
-
-**API 서버**: https://community.ktb-waf.cloud/api/v1  
-**서비스**: https://community.ktb-waf.cloud  
-**헬스체크**: https://community.ktb-waf.cloud/api/v1/health
-
-## 데모 영상
+**서비스**: https://community.ktb-waf.cloud
 
 ![Demo](docs/videos/demo.gif)
 
@@ -108,7 +103,6 @@ GitHub (PR Merge to deploy) → GitHub Actions (Public)
 ## 시작하기
 
 ### 사전 요구사항
-
 - Java 21 이상
 - MySQL 8.0 이상
 - Gradle 8.14.3 이상 (또는 ./gradlew 사용)
@@ -145,7 +139,7 @@ FRONTEND_URL=http://localhost:3000
 java -jar build/libs/community-0.0.1-SNAPSHOT.jar
 ```
 
-**접속**: http://localhost:8080
+**접속**: http://localhost:8080  
 **헬스체크**: http://localhost:8080/health
 
 ## 프로젝트 구조
@@ -173,9 +167,7 @@ docs/be/                 # 백엔드 문서
 └── DDL.md               # 데이터베이스 스키마
 ```
 
-## 문서
-
-### 개발 문서
+## 개발 문서
 
 - **[CLAUDE.md](CLAUDE.md)**: Claude Code 작업 가이드 (프로젝트 개요, 개발 규칙)
 - **[docs/be/PLAN.md](docs/be/PLAN.md)**: Phase별 구현 계획 및 체크리스트
