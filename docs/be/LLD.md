@@ -156,8 +156,8 @@ description: 아키텍처 및 구현 패턴 상세 설계. JWT 인증, Rate Limi
 
 ### 6.1 JWT 토큰
 
-**Access Token:** 15분, API 인증
-**Refresh Token:** 7일, Access 갱신, `user_tokens` 테이블 저장
+**Access Token:** 15분, API 인증  
+**Refresh Token:** 7일, Access 갱신, `user_tokens` 테이블 저장  
 **Guest Token:** 5분, 회원가입용 임시 토큰 (role: GUEST, userId: 0)
 
 **Payload 예시:**
@@ -172,49 +172,78 @@ description: 아키텍처 및 구현 패턴 상세 설계. JWT 인증, Rate Limi
 ```
 
 **Guest Token 용도:**
-- 회원가입 시 프로필 이미지 업로드용 (Lambda 연동)
+- 회원가입 시 프로필 이미지 업로드용 (Presigned URL 발급)
 - userId: 0, role: GUEST로 식별
 - Refresh Token 없음 (일회용)
 - 미사용 이미지는 TTL 1시간 후 자동 삭제
 
-### 6.2 인증 흐름 (httpOnly Cookie)
+### 6.2 인증 흐름 (Authorization Header + localStorage)
 
-**로그인 (Cookie 기반):**
+**토큰 전략:**
+- **Access Token (AT)**: localStorage 저장 (MPA 환경) → Authorization 헤더로 전송
+- **Refresh Token (RT)**: httpOnly Cookie → 자동 전송 (7일, user_tokens 테이블 저장)
+- **Guest Token**: localStorage 저장 (회원가입 임시 토큰, 5분, 일회용)
+
+**로그인 플로우:**
 1. Client → POST /auth/login (credentials: 'include')
 2. 서버 → BCrypt 검증
 3. 서버 → Access + Refresh 토큰 생성
-4. 서버 → httpOnly Cookie 발급 (access_token, refresh_token)
-5. 서버 → Refresh를 user_tokens 테이블에 저장
-6. 클라이언트 → Cookie 자동 저장 (JavaScript 접근 불가)
+4. 서버 → **Response Body에 AT 반환** + **httpOnly Cookie로 RT 발급**
+5. 서버 → RT를 user_tokens 테이블에 저장
+6. 클라이언트 → `localStorage.setItem('accessToken', data.accessToken)` (MPA 환경)
 
-**API 호출 (Cookie 자동 전송):**
-1. Client → API 요청 (credentials: 'include')
-2. 브라우저 → Cookie 자동 포함 (access_token)
-3. JwtAuthenticationFilter → Cookie에서 토큰 추출
-4. JwtAuthenticationFilter → 토큰 검증 및 SecurityContext 저장
+**API 호출 플로우:**
+1. Client → `Authorization: Bearer {localStorage.getItem('accessToken')}` 헤더 추가
+2. JwtAuthenticationFilter → Authorization 헤더에서 AT 추출
+3. JwtAuthenticationFilter → 토큰 검증 및 **Request Attribute에 userId 저장** (`req.setAttribute()`)
+4. Controller → `@RequestAttribute Long userId`로 인증 정보 접근
 5. 비즈니스 로직 실행
 
-**토큰 갱신 (Cookie 기반):**
+**토큰 갱신 플로우:**
 1. Client → POST /auth/refresh_token (credentials: 'include')
-2. 서버 → Cookie에서 refresh_token 추출
+2. 서버 → httpOnly Cookie에서 RT 추출
 3. 서버 → user_tokens 테이블 검증
-4. 서버 → 새 access_token 발급 → httpOnly Cookie 업데이트
+4. 서버 → 새 AT 발급 → **Response Body에 반환**
+5. 클라이언트 → `localStorage.setItem('accessToken', newToken)` 업데이트
 
-**하위 호환성:**
-- Authorization header (Bearer token) 지원 유지
-- Cookie 우선, header는 fallback
+**보안 트레이드오프:**
+- **AT in localStorage**: XSS 취약 (BUT: Express.js 서버 렌더링으로 XSS 벡터 최소화)
+- **RT in httpOnly Cookie**: XSS 안전, CSRF 대응 (SameSite 설정)
+- **MPA 환경**: JS 메모리 공유 불가 → localStorage 불가피
 
-### 6.3 핵심 보안 설정 (CORS + CSRF)
+### 6.3 핵심 보안 설정 (최소 Spring Security + 커스텀 필터)
 
-**SecurityConfig 핵심:**
+**설계 철학:**
+- **Spring Security**: CORS 설정만 담당 (인증/인가 로직 없음)
+- **JwtAuthenticationFilter**: 모든 인증 처리 (커스텀 Servlet Filter, `@Order(1)`)
+- **장점**: 간단한 로직, Spring Security 복잡도 제거, 직접적인 제어
+
+**SecurityConfig (최소 구성):**
 ```java
 @Bean
 public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(List.of(frontendUrl));  // Express.js
-    config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+
+    // 다중 origin 지원 (개발 + EC2)
+    List<String> allowedOrigins = new ArrayList<>();
+    allowedOrigins.add(frontendUrl);  // 환경변수 (포트 포함)
+
+    // 포트 제거 버전 추가 (iptables 포트 포워딩 대응)
+    String baseUrl = frontendUrl.replaceAll(":\\d+$", "");
+    if (!baseUrl.equals(frontendUrl)) {
+        allowedOrigins.add(baseUrl);
+    }
+
+    // localhost 개발 환경 추가
+    if (!frontendUrl.contains("localhost")) {
+        allowedOrigins.add("http://localhost:3000");
+        allowedOrigins.add("http://localhost");
+    }
+
+    config.setAllowedOrigins(allowedOrigins);
+    config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
-    config.setAllowCredentials(true);  // Cookie 전송 허용
+    config.setAllowCredentials(true);  // Cookie (RT) 전송 허용
     config.setMaxAge(3600L);
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -226,76 +255,112 @@ public CorsConfigurationSource corsConfigurationSource() {
 public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf
-                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .ignoringRequestMatchers(
-                            "/auth/**",           // 인증 관련
-                            "/users/**",          // 사용자 관련 (회원가입, 프로필 수정 등)
-                            "/posts/**",          // 게시글 관련 모든 API
-                            "/images/**"          // 이미지 업로드
-                    )
-            )
+            .csrf(AbstractHttpConfigurer::disable)  // CSRF 비활성화 (JWT 방식)
+            .formLogin(AbstractHttpConfigurer::disable)  // 기본 로그인 폼 비활성화
+            .httpBasic(AbstractHttpConfigurer::disable)  // HTTP Basic 인증 비활성화
             .sessionManagement(session ->
                     session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                    // ========== 순서 중요: 구체적인 패턴 먼저! ==========
-
-                    // 1. 특수 케이스 - GET이지만 인증 필요
-                    .requestMatchers(HttpMethod.GET, "/posts/users/me/likes").authenticated()
-                    
-                    // 2. Public GET 엔드포인트
-                    .requestMatchers(HttpMethod.GET, 
-                            "/posts",                // 게시글 목록
-                            "/posts/*",              // 게시글 상세
-                            "/posts/*/comments",     // 댓글 목록
-                            "/users/*"               // 사용자 프로필 (공개)
-                    ).permitAll()
-                    
-                    // 3. 인증 필요 - Posts
-                    .requestMatchers(HttpMethod.POST, "/posts").authenticated()
-                    .requestMatchers(HttpMethod.PATCH, "/posts/*").authenticated()
-                    .requestMatchers(HttpMethod.DELETE, "/posts/*").authenticated()
-                    .requestMatchers(HttpMethod.POST, "/posts/*/like").authenticated()
-                    .requestMatchers(HttpMethod.DELETE, "/posts/*/like").authenticated()
-                    
-                    // 4. 인증 필요 - Comments
-                    .requestMatchers(HttpMethod.POST, "/posts/*/comments").authenticated()
-                    .requestMatchers(HttpMethod.PATCH, "/posts/*/comments/*").authenticated()
-                    .requestMatchers(HttpMethod.DELETE, "/posts/*/comments/*").authenticated()
-                    
-                    // 5. 인증 필요 - Users
-                    .requestMatchers(HttpMethod.PATCH, "/users/*").authenticated()
-                    .requestMatchers(HttpMethod.PATCH, "/users/*/password").authenticated()
-                    
-                    // 6. 인증 필요 - Images
-                    .requestMatchers(HttpMethod.POST, "/images").authenticated()
-                    
-                    // 7. Public - Auth
-                    .requestMatchers("/auth/login", "/auth/refresh_token", "/users/signup").permitAll()
-
-                    // 8. Public - Legal & Static Resources
-                    .requestMatchers("/terms", "/privacy", "/css/**").permitAll()
-
-                    // 9. 나머지는 인증 필요
-                    .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                    .anyRequest().permitAll()  // Spring Security는 인증 안 함 (JwtAuthenticationFilter가 처리)
+            );
 
     return http.build();
 }
 ```
 
-**보안 강화 요소:**
-- **CORS**: Express.js 연동 (allowCredentials: true)
-- **CSRF**: Cookie 기반 토큰, API 엔드포인트는 제외 (/auth/**, /users/**, /posts/**, /images/**)
-  - 제외 이유: JWT httpOnly Cookie 기반 인증이 CSRF 보호 제공
-  - Cross-origin 환경 (localhost:3000 → localhost:8080)에서 CSRF 토큰 접근 불가 해결
-- **Cookie**: httpOnly (XSS 방어), SameSite=Strict (CSRF 방어)
+**JwtAuthenticationFilter (커스텀 Servlet Filter):**
+```java
+@Component
+@Order(1)  // 가장 먼저 실행
+public class JwtAuthenticationFilter implements Filter {
 
-**권한 제어:**
-- Spring Security가 HTTP Method별로 엔드포인트 접근 제어
-- GET(조회)는 permitAll(), POST/PATCH/DELETE는 authenticated()
-- Controller는 Authentication 파라미터로 userId 추출 (Security 검증 완료 후)
+    private final JwtTokenProvider jwtTokenProvider;
+
+    // 공개 엔드포인트 (인증 불필요)
+    private static final Set<String> PUBLIC_PATHS = Set.of(
+            "/auth/login", "/auth/logout", "/auth/refresh_token", "/auth/guest-token",
+            "/users/signup", "/users", "/terms", "/privacy", "/stats", "/health"
+    );
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest req = (HttpServletRequest) request;
+        String uri = req.getRequestURI();
+        String method = req.getMethod();
+
+        // 1. OPTIONS 요청은 통과 (CORS Preflight)
+        if (HttpMethod.OPTIONS.matches(method)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 2. 공개 엔드포인트는 선택적 인증 (JWT 있으면 검증, 없으면 통과)
+        if (isPublicEndpoint(uri, method)) {
+            String jwt = extractJwt(req);
+            if (jwt != null && jwtTokenProvider.validateToken(jwt)) {
+                Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+                req.setAttribute("userId", userId);  // 로그인 상태 저장
+            }
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 3. 보호된 엔드포인트 - JWT 필수
+        String jwt = extractJwt(req);
+        if (jwt == null || !jwtTokenProvider.validateToken(jwt)) {
+            sendUnauthorized(response, "No access token");
+            return;
+        }
+
+        Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+        req.setAttribute("userId", userId);  // Request Attribute에 저장
+
+        chain.doFilter(request, response);
+    }
+
+    // JWT 추출 (Authorization: Bearer {token})
+    private String extractJwt(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+
+    // 공개 엔드포인트 판단 (GET 요청, PUBLIC_PATHS, /images/*)
+    private boolean isPublicEndpoint(String uri, String method) {
+        if (PUBLIC_PATHS.contains(uri)) return true;
+        if (uri.startsWith("/images/") && !uri.equals("/images/presigned-url")) return true;
+        if (HttpMethod.GET.matches(method)) {
+            if (uri.equals("/posts/users/me/likes")) return false;  // 예외: 인증 필요
+            if (uri.startsWith("/posts") || uri.startsWith("/users/")) return true;
+        }
+        return false;
+    }
+}
+```
+
+**인증 처리 흐름:**
+1. **JwtAuthenticationFilter** (`@Order(1)`) 실행
+2. Authorization 헤더에서 JWT 추출
+3. JwtTokenProvider로 토큰 검증 (서명, 만료 시간)
+4. Payload에서 userId 추출 → `request.setAttribute("userId", userId)`
+5. Controller에서 `@RequestAttribute Long userId`로 접근
+
+**권한 제어 방식:**
+- **Spring Security**: 없음 (`.anyRequest().permitAll()`)
+- **JwtAuthenticationFilter**: 공개/보호 엔드포인트 구분
+- **Controller**: `@RequestAttribute` 파라미터로 userId 체크
+  - userId 없음 → 401 Unauthorized (Filter에서 차단)
+  - userId 존재 → 인증된 사용자
+
+**보안 요소:**
+- **CORS**: Express.js 연동 (allowCredentials: true)
+- **CSRF**: 비활성화 (JWT Authorization 헤더 방식, Cookie 기반 CSRF 불필요)
+- **XSS**: AT는 localStorage (취약) BUT Express.js 서버 렌더링으로 XSS 벡터 최소화
+- **Session**: STATELESS (세션 사용 안 함)
 
 ### 6.4 비밀번호 정책
 
@@ -914,16 +979,16 @@ public Post toEntity(User user) {
 
 **핵심 설정 항목:**
 
-| 항목 | 설정값 | 설명 |
-|------|--------|------|
-| **HikariCP** | Spring Boot default | DB 커넥션 풀 (default: 10) |
-| **Multipart** | max-file-size: 5MB, max-request-size: 10MB | 이미지 업로드 제한 |
-| **JPA** | ddl-auto: validate, open-in-view: false, default_batch_fetch_size: 100 | 운영 모드, OSIV 비활성화, N+1 최적화 |
-| **JWT** | access: 15분 (900000ms), refresh: 7일 (604800000ms) | 토큰 유효기간 |
+| 항목 | 설정값 | 설명                            |
+|------|--------|-------------------------------|
+| **HikariCP** | Spring Boot default | DB 커넥션 풀 (default: 20)         |
+| **Multipart** | max-file-size: 5MB, max-request-size: 10MB | 이미지 업로드 제한                    |
+| **JPA** | ddl-auto: validate, open-in-view: false, default_batch_fetch_size: 100 | 운영 모드, OSIV 비활성화, N+1 최적화     |
+| **JWT** | access: 15분 (900000ms), refresh: 7일 (604800000ms) | 토큰 유효기간                       |
 | **S3** | bucket/region 환경 변수 주입 | DefaultCredentialsProvider 체인 |
-| **Rate Limit** | 코드 기반 (@RateLimit 어노테이션) | 엔드포인트별 개별 설정 |
-| **Logging** | root: INFO, com.ktb.community: DEBUG | 개발 환경 로깅 레벨 |
-| **Server** | port: 8080 | 서버 포트 |
+| **Rate Limit** | 코드 기반 (@RateLimit 어노테이션) | 엔드포인트별 개별 설정                  |
+| **Logging** | root: INFO, com.ktb.community: DEBUG | 개발 환경 로깅 레벨                   |
+| **Server** | port: 8080 | 서버 포트                         |
 
 **환경 변수 (필수):**
 ```bash
@@ -1072,13 +1137,31 @@ int decrementLikeCount(@Param("postId") Long postId);
 
 ## 13. 배포 및 운영
 
-**환경 변수:** `@docs/be/LLD.md Section 10` 참조 (6개 필수 변수)
+**배포 문서:** `@docs/deployment/` 폴더 참조 (상세 가이드)
+
+**주요 문서:**
+- **@docs/deployment/README.md**: 배포 전체 가이드 (마스터 인덱스)
+- **@docs/deployment/CI-CD.md**: CI/CD 파이프라인 (GitHub Actions → Jenkins)
+- **@docs/deployment/EC2-DEPENDENCIES.md**: 수동 배포 의존성 (Java, Docker, MySQL, EFS, systemd)
+
+**환경 변수:** `@docs/deployment/EC2-DEPENDENCIES.md Section "환경 변수"` 참조 (7개 필수 변수)
+- DB_URL, DB_USERNAME, DB_PASSWORD
+- JWT_SECRET
+- AWS_S3_BUCKET, AWS_REGION
+- FRONTEND_URL
 
 **배치 작업:**
 - 고아 이미지 정리: 매일 새벽 3시, @Scheduled (ImageCleanupBatchService)
 - TTL 만료 이미지 (expires_at < NOW) 자동 삭제 (S3 + DB)
 
-**로그 레벨:**
+**인프라 구성:** `@docs/deployment/CI-CD.md Section "인프라 아키텍처"` 참조
+- ALB (경로 기반 라우팅: `/api/v1/*` → BE)
+- EC2 (Private Subnet, Auto Scaling 대응)
+- RDS MySQL 8.0+
+- S3 (이미지 저장)
+- ECR (Docker 이미지 저장소)
+
+**로그 레벨:** `@docs/be/LLD.md Section 14` 참조
 - 운영: INFO, 개발: DEBUG
 - 주요 포인트: API 요청/응답, 인증 실패, 비즈니스 에러
 

@@ -3,6 +3,14 @@ name: rest-api-spec
 description: REST API 엔드포인트 명세서. API URL, HTTP Method, 요청/응답 형식, 에러 코드 확인 시 참조. FE 연동, Postman 테스트, ALB 라우팅 이해에 활용.
 ---
 
+# API 명세서
+
+**Version**: 1.0  
+**Last Updated**: 2025-12-01  
+**Status**: 완료 (Presigned URL 포함)
+
+---
+
 # DC2 커뮤니티 REST API 문서
 
 ## 목차
@@ -117,7 +125,16 @@ fetch(`${API_BASE_URL}/auth/login`, { ... });  // → /auth/login
 - 200: `logout_success`
 - 400/500: [공통 에러 코드](#응답-코드) 참조
 
-**참고:** AT는 클라이언트에서 메모리 변수를 null로 설정하여 삭제
+**응답 예시:**
+```json
+{
+  "message": "logout_success",
+  "data": null,
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
+
+**참고:** AT는 클라이언트에서 localStorage에서 삭제 (`localStorage.removeItem('accessToken')`)
 
 ---
 
@@ -196,21 +213,22 @@ async function refreshAccessToken() {
 ```
 
 **토큰 특성:**
-| 항목 | 값 |
-|------|-----|
-| 유효기간 | 5분 |
-| subject | "0" (게스트 전용 ID) |
-| role | GUEST |
-| Refresh Token | 없음 (일회용) |
+
+| 항목 | 값 |  
+|------|-----|  
+| 유효기간 | 5분 |  
+| subject | "0" (게스트 전용 ID) |  
+| role | GUEST |  
+| Refresh Token | 없음 (일회용) |  
 
 **사용 시나리오:**
 1. 회원가입 페이지 로드 시 자동 발급
-2. 프로필 이미지 업로드 (Lambda 연동)
+2. 프로필 이미지 업로드 (Presigned URL 발급 → S3 직접 업로드)
 3. 회원가입 완료 후 정식 AT/RT로 교체
 
-**Lambda 검증:**
-- Lambda는 `role: GUEST` 또는 `userId == 0` 체크로 회원가입 업로드 판별
-- 미사용 이미지는 TTL 1시간 후 자동 삭제
+**Presigned URL 검증:**
+- BE는 `role: GUEST` 또는 `userId == 0` 체크로 회원가입 업로드 판별
+- 미사용 이미지는 TTL 1시간 후 자동 삭제 (배치 작업)
 
 ---
 
@@ -264,6 +282,20 @@ async function refreshAccessToken() {
 - 404: USER-001 (User not found)
 - 401/500: [공통 에러 코드](#응답-코드) 참조
 
+**응답 예시:**
+```json
+{
+  "message": "get_profile_success",
+  "data": {
+    "userId": 1,
+    "email": "test@startupcode.kr",
+    "nickname": "testuser",
+    "profileImage": "https://ktb-3-community-images.s3.ap-northeast-2.amazonaws.com/profile123.jpg"
+  },
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
+
 ---
 
 ### 2.3 사용자 정보 수정
@@ -271,26 +303,52 @@ async function refreshAccessToken() {
 
 **헤더:** Authorization: Bearer {access_token}
 
-**Content-Type:** `multipart/form-data`
+**Content-Type:** `application/json`
 
-**Request Parts:**
+**Request Body:**
+```json
+{
+  "nickname": "새닉네임",
+  "imageId": 123,
+  "removeImage": false
+}
+```
+
+**필드:**
 - `nickname` (String, 선택) - 닉네임 (10자 이내)
-- `profileImage` (File, 선택) - 프로필 이미지 (JPG/PNG/GIF, 최대 5MB)
+- `imageId` (Number, 선택) - Presigned URL로 업로드한 이미지 ID
 - `removeImage` (Boolean, 선택) - 이미지 제거 플래그
 
+**이미지 업로드 플로우:**
+1. `GET /images/presigned-url?filename=profile.jpg` → Presigned URL + imageId 받기
+2. 클라이언트가 Presigned URL로 S3 직접 업로드
+3. `PATCH /users/{id}` 시 imageId를 JSON으로 전송
+
 **이미지 처리:**
-- `profileImage: [File]` - 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
+- `imageId: 123` - 새 이미지로 교체 (기존 이미지는 고아 처리 → TTL 1시간 복원)
 - `removeImage: true` - 기존 이미지 제거 (TTL 1시간 후 배치 삭제)
 - 둘 다 없음 - 이미지 유지
-- **주의:** removeImage와 profileImage 동시 전달 시 **profileImage가 우선 적용**됨
+- **주의:** removeImage와 imageId 동시 전달 시 **imageId가 우선 적용**됨
 
 **응답:**
 - 200: `update_profile_success` → 수정된 정보 반환
-- 404: USER-001 (User not found)
+- 404: USER-001 (User not found), IMAGE-001 (Image not found)
 - 409: USER-003 (Nickname exists)
-- 413: IMAGE-002 (File too large)
-- 400: IMAGE-003 (Invalid file type)
 - 401/403/500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "update_profile_success",
+  "data": {
+    "userId": 1,
+    "email": "test@startupcode.kr",
+    "nickname": "새닉네임",
+    "profileImage": "https://ktb-3-community-images.s3.ap-northeast-2.amazonaws.com/profile456.jpg"
+  },
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
 
 ---
 
@@ -308,6 +366,15 @@ async function refreshAccessToken() {
 - 404: USER-001 (User not found)
 - 400: USER-004 (Password policy), USER-006 (Password mismatch)
 - 401/403/500: [공통 에러 코드](#응답-코드) 참조
+
+**응답 예시:**
+```json
+{
+  "message": "update_password_success",
+  "data": null,
+  "timestamp": "2025-10-21T10:00:00"
+}
+```
 
 ---
 
@@ -366,32 +433,20 @@ async function refreshAccessToken() {
 - `GET /posts?offset=20&sort=latest` 요청 시 offset은 무시되고 첫 페이지 반환
 - 무한 스크롤 구현 시 cursor 방식을 사용하세요
 
-#### likes (인기순, Offset 방식)
+#### likes (인기순) - ⚠️ 미구현
+
 **Endpoint:** `GET /posts?offset=0&limit=10&sort=likes`
 
-**쿼리:** offset(Number, default 0), limit(Number, default 10), sort=likes
+**상태:** 🚧 미구현 (Phase 6 이후 작업 예정)
 
-**응답:**
-- 200: `get_posts_success` → posts[], pagination.total_count
-- 400/500: [공통 에러 코드](#응답-코드) 참조
+**계획된 스펙:**
+- **정렬 기준**: `stats.like_count` DESC, `created_at` DESC
+- **페이지네이션**: Offset 방식 (cursor 방식은 Phase 7 이후)
+- **응답 구조**: latest와 동일한 posts[] 배열 + pagination.total_count
 
-**데이터 구조 (Offset):**
-```json
-{
-  "posts": [{
-    "postId": 123,
-    "title": "...",
-    "content": "...",
-    "createdAt": "2025-09-30T10:00:00Z",
-    "updatedAt": "2025-09-30T10:00:00Z",
-    "author": { "userId": 1, "nickname": "...", "profileImage": "..." },
-    "stats": { "likeCount": 42, "commentCount": 15, "viewCount": 230 }
-  }],
-  "pagination": { "total_count": 150 }
-}
-```
-
-**참고:** likes 정렬은 추후 cursor 방식으로 전환 예정
+**현재 동작:**
+- `?sort=likes` 파라미터 전달 시 → latest 정렬과 동일하게 처리됨
+- 좋아요 순 정렬이 필요한 경우 클라이언트에서 정렬 수행 필요
 
 ---
 
@@ -508,7 +563,7 @@ return PostResponse.from(post);
 }
 ```
 
-**선택:** title(String), content(String), imageId(Number), removeImage(Boolean)
+**선택:** title(String), content(String), imageId(Number), removeImage(Boolean)  
 **참고:** PATCH는 부분 업데이트, 최소 1개 필드 필요 , 변경이 없을 경우 WAS 내에서 처리바람.
 
 **이미지 처리:**
@@ -593,6 +648,7 @@ return PostResponse.from(post);
 **헤더:** Authorization: Bearer {access_token | guest_token}
 
 **Query Parameters:**
+
 | 파라미터 | 타입 | 필수 | 설명 |
 |---------|------|------|------|
 | filename | String | ✅ | 원본 파일명 (확장자 포함) |
@@ -790,7 +846,7 @@ await fetch('/users/signup', {
 ### 인증 방식 (JWT + httpOnly Cookie)
 
 **토큰 전략:**
-- **AT (Access Token)**: 응답 body → 클라이언트 JS 메모리 → `Authorization: Bearer {token}` 헤더
+- **AT (Access Token)**: 응답 body → 클라이언트 localStorage → `Authorization: Bearer {token}` 헤더
 - **RT (Refresh Token)**: httpOnly Cookie → 브라우저 자동 관리 → `/auth/refresh_token` 전용
 
 **프론트엔드 구현 예시:**
@@ -798,7 +854,6 @@ await fetch('/users/signup', {
 // Production: ALB 경유 (API_BASE_URL은 빈 문자열 또는 도메인)
 const API_BASE_URL = window.APP_CONFIG?.API_BASE_URL || '';
 const API_PREFIX = window.APP_CONFIG?.API_PREFIX || '/api/v1';
-let accessToken = null;  // AT는 메모리 저장
 
 // 로그인
 const response = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/login`, {
@@ -810,14 +865,15 @@ const response = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/login`, {
 
 if (response.ok) {
   const data = await response.json();
-  accessToken = data.data.accessToken;  // AT 저장
+  localStorage.setItem('accessToken', data.data.accessToken);  // AT를 localStorage에 저장 (MPA 환경)
   localStorage.setItem('userId', data.data.userId);
 }
 
 // API 요청 (AT를 Authorization 헤더로 전송)
+const accessToken = localStorage.getItem('accessToken');
 const posts = await fetch(`${API_BASE_URL}${API_PREFIX}/posts`, {
   headers: {
-    'Authorization': `Bearer ${accessToken}`  // AT 전송
+    'Authorization': `Bearer ${accessToken}`  // localStorage에서 가져온 AT 전송
   },
   credentials: 'include'
 });
@@ -870,20 +926,23 @@ const response = await fetch('http://localhost:8080/posts', {
 - Cookie 우선, Authorization header는 하위 호환성 지원
 
 **토큰 특성:**
+
 | 항목 | AT | RT |
 |------|----|----|
 | 전달 방식 | 응답 body | httpOnly Cookie |
-| 클라이언트 저장 | JS 메모리 변수 | 브라우저 쿠키 |
+| 클라이언트 저장 | localStorage (MPA 환경) | 브라우저 쿠키 |
 | 서버 전송 | Authorization 헤더 | Cookie 헤더 (자동) |
 | 유효기간 | 15분 | 7일 |
-| XSS 취약성 | 🔴 취약 | 🟢 안전 |
+| XSS 취약성 | 🔴 취약 (localStorage) | 🟢 안전 (httpOnly) |
 | Path 제한 | 없음 | /auth/refresh_token |
 
 ### 페이지네이션
-```
-?offset=0&limit=10
-```
-offset: 시작 위치 (0부터), limit: 한 번에 가져올 개수
+
+**두 가지 방식:**
+- **Cursor 방식**: 최신순 정렬 (GET /posts?cursor=xxx&limit=10) - [Section 3.1 latest 참조](#latest-최신순-cursor-방식)
+- **Offset 방식**: 좋아요순/댓글 목록 (GET /posts?offset=0&limit=10) - [Section 3.1 likes 참조](#likes-인기순---️-미구현)
+
+**상세 스펙**: [Section 3.1 게시글 목록 조회](#31-게시글-목록-조회) 참조
 
 ### 표준 응답 형식
 ```json
