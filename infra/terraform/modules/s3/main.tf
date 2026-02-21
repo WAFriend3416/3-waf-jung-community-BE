@@ -1,6 +1,7 @@
 # Image Bucket
 resource "aws_s3_bucket" "images" {
-  bucket = var.image_bucket_name
+  bucket        = var.image_bucket_name
+  force_destroy = true
 
   tags = {
     Name        = var.image_bucket_name
@@ -29,7 +30,8 @@ resource "aws_s3_bucket_cors_configuration" "images" {
 
 # ALB Access Log Bucket
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${var.project}-${var.environment}-alb-logs"
+  bucket        = "${var.project}-${var.environment}-alb-logs"
+  force_destroy = true
 
   tags = {
     Name        = "${var.project}-${var.environment}-alb-logs"
