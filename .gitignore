@@ -56,3 +56,17 @@ scripts/check_password.sql
 legacy/
 logs/
 *.log
+
+# Terraform
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/.terraform/
+infra/terraform/**/terraform.tfvars
+infra/terraform/**/.terraform.lock.hcl
+infra/terraform/**/*.tfplan
+
+# Packer
+infra/packer/packer_cache/
+
+# K6 results
+results/
