@@ -203,7 +203,7 @@ export function multipartUploadScenario() {
       'multipart upload has imageId': (r) => {
         try {
           const body = JSON.parse(r.body);
-          return body.data && body.data.image_id;
+          return body.data && body.data.imageId;
         } catch (e) {
           return false;
         }
