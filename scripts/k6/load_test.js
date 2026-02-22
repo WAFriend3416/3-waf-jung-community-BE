@@ -12,6 +12,22 @@ const errorRate = new Rate('errors');
 const loginDuration = new Trend('login_duration');
 const postListDuration = new Trend('post_list_duration');
 const postDetailDuration = new Trend('post_detail_duration');
+const presignedUrlDuration = new Trend('presigned_url_duration');
+const s3UploadDuration = new Trend('s3_upload_duration');
+
+// 테스트 이미지 파일 로드
+const testImages = [
+  { data: open('./testdata/test_image1.jpg', 'b'), name: 'test_image1.jpg', type: 'image/jpeg' },
+  { data: open('./testdata/test_image2.jpg', 'b'), name: 'test_image2.jpg', type: 'image/jpeg' },
+  { data: open('./testdata/test_image3.jpeg', 'b'), name: 'test_image3.jpeg', type: 'image/jpeg' },
+  { data: open('./testdata/test_image4.jpeg', 'b'), name: 'test_image4.jpeg', type: 'image/jpeg' },
+  { data: open('./testdata/test_image5.jpeg', 'b'), name: 'test_image5.jpeg', type: 'image/jpeg' },
+  { data: open('./testdata/test_image6.jpeg', 'b'), name: 'test_image6.jpeg', type: 'image/jpeg' },
+];
+
+function getRandomImage() {
+  return testImages[Math.floor(Math.random() * testImages.length)];
+}
 
 // ============================================
 // 테스트 시나리오 옵션
@@ -71,7 +87,7 @@ function getRandomUser() {
   return TEST_USERS[Math.floor(Math.random() * TEST_USERS.length)];
 }
 
-function getRandomPostId(max = 3000) {
+function getRandomPostId(max = 1500) {
   return Math.floor(Math.random() * max) + 1;
 }
 
@@ -256,6 +272,44 @@ export function writeHeavyScenario() {
 
     errorRate.add(!success && res.status !== 404);
   });
+
+  sleep(1);
+
+  // 50% 확률로 이미지 업로드 (Presigned URL 방식)
+  if (Math.random() < 0.5) {
+    group('이미지 업로드 (Presigned URL)', () => {
+      const img = getRandomImage();
+      const presignedRes = http.get(
+        `${BASE_URL}/images/presigned-url?filename=${img.name}&content_type=${encodeURIComponent(img.type)}`,
+        {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+          tags: { name: 'presigned_url' },
+        }
+      );
+
+      presignedUrlDuration.add(presignedRes.timings.duration);
+
+      const presignedOk = check(presignedRes, {
+        'presigned url status 201': (r) => r.status === 201,
+      });
+
+      if (presignedOk) {
+        const uploadUrl = JSON.parse(presignedRes.body).data.upload_url;
+        const s3Res = http.put(uploadUrl, img.data, {
+          headers: { 'Content-Type': img.type, 'x-amz-acl': 'public-read' },
+          tags: { name: 's3_upload' },
+        });
+
+        s3UploadDuration.add(s3Res.timings.duration);
+
+        check(s3Res, {
+          's3 upload status 200': (r) => r.status === 200,
+        });
+      }
+
+      errorRate.add(!presignedOk);
+    });
+  }
 
   sleep(2);
 }

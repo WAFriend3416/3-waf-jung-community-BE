@@ -87,10 +87,10 @@ module "ssm" {
   region          = var.region
   s3_bucket_name  = module.s3.image_bucket_name
   frontend_url    = "https://community.${var.domain_name}"
-  db_url          = "jdbc:mysql://${module.rds.primary_address}:3306/community?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  db_url          = "jdbc:mysql://${module.rds.primary_address}:3306/community?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull"
   db_username     = var.db_username
   db_password     = var.db_password
-  db_readonly_url = "jdbc:mysql://${module.rds.replica_address}:3306/community?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  db_readonly_url = "jdbc:mysql://${module.rds.replica_address}:3306/community?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull"
   jwt_secret      = var.jwt_secret
 }
 

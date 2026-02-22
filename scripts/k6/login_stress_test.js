@@ -33,7 +33,7 @@ export const options = {
 };
 
 export default function () {
-  const userId = Math.floor(Math.random() * 1200) + 1;
+  const userId = Math.floor(Math.random() * 600) + 1;
   const email = `user${userId}@test.com`;
 
   // 로그인

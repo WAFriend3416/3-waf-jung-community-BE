@@ -64,6 +64,7 @@ infra/terraform/**/.terraform/
 infra/terraform/**/terraform.tfvars
 infra/terraform/**/.terraform.lock.hcl
 infra/terraform/**/*.tfplan
+infra/terraform/**/tfplan
 
 # Packer
 infra/packer/packer_cache/

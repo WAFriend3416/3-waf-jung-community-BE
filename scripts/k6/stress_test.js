@@ -43,7 +43,7 @@ export const options = {
   },
 };
 
-function getRandomPostId(max = 3000) {
+function getRandomPostId(max = 1500) {
   return Math.floor(Math.random() * max) + 1;
 }
 
@@ -72,7 +72,7 @@ export default function () {
   sleep(0.3);
 
   if (isWriter) {
-    const userId = Math.floor(Math.random() * 1200) + 1;
+    const userId = Math.floor(Math.random() * 600) + 1;
     const loginRes = http.post(
       `${BASE_URL}/auth/login`,
       JSON.stringify({ email: `user${userId}@test.com`, password: 'Test1234!' }),

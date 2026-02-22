@@ -77,6 +77,16 @@ for i in $(seq 1 36); do
   sleep 5
 done
 
+# === Schema Fix: Ensure DEFAULT values on columns Hibernate doesn't manage ===
+(
+  set +e
+  DB_HOST=$(echo "$DB_URL" | sed -n 's|jdbc:mysql://\([^:]*\):.*|\1|p')
+  echo "Fixing post_stats.last_updated DEFAULT value..."
+  mysql -h "$DB_HOST" -u "$DB_USERNAME" -p"$DB_PASSWORD" community -e \
+    "ALTER TABLE post_stats MODIFY last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;" 2>/dev/null \
+    && echo "Schema fix applied." || echo "WARN: Schema fix skipped (table may not exist yet)."
+) || true
+
 # === One-time Data Seeding (non-fatal) ===
 # Wrapped in subshell so seeding failures don't prevent instance health check
 (

@@ -54,12 +54,12 @@ export const options = {
 // ============================================
 // 테스트 데이터
 // ============================================
-function getRandomEmail(max = 1200) {
+function getRandomEmail(max = 600) {
   const id = Math.floor(Math.random() * max) + 1;
   return `user${id}@test.com`;
 }
 
-function getRandomPostId(max = 3000) {
+function getRandomPostId(max = 1500) {
   return Math.floor(Math.random() * max) + 1;
 }
 
@@ -67,7 +67,7 @@ function getRandomPostId(max = 3000) {
 // 메인 시나리오: 실제 사용자 행동 시뮬레이션
 // ============================================
 export default function () {
-  const userId = Math.floor(Math.random() * 1200) + 1;
+  const userId = Math.floor(Math.random() * 600) + 1;
   const email = `user${userId}@test.com`;
 
   // 70% 확률로 비로그인 사용자 (읽기만)

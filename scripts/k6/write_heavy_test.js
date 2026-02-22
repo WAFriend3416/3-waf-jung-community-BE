@@ -32,7 +32,7 @@ export const options = {
   },
 };
 
-function getRandomPostId(max = 3000) {
+function getRandomPostId(max = 1500) {
   return Math.floor(Math.random() * max) + 1;
 }
 
@@ -44,7 +44,7 @@ function authHeaders(token) {
 }
 
 export default function () {
-  const userId = Math.floor(Math.random() * 1200) + 1;
+  const userId = Math.floor(Math.random() * 600) + 1;
   const email = `user${userId}@test.com`;
 
   // 1. 로그인 (INSERT user_tokens)
