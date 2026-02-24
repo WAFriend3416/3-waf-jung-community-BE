@@ -13,13 +13,16 @@ import com.ktb.community.repository.UserTokenRepository;
 import com.ktb.community.security.JwtTokenProvider;
 // [JWT 전환] 세션 방식 (보존)
 // import com.ktb.community.session.SessionManager;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.Semaphore;
 
 /**
  * 인증 서비스
@@ -48,8 +51,21 @@ public class AuthService {
     private final ImageService imageService;
     private final ImageRepository imageRepository;
 
-    // [JWT 전환] 세션 방식 (보존)
-    // private final SessionManager sessionManager;
+    // BCrypt 동시 실행 제한 (Virtual Threads CPU 포화 방지)
+    private Semaphore bcryptSemaphore;
+
+    @Value("${bcrypt.max-concurrent:0}")
+    private int bcryptMaxConcurrent;
+
+    @PostConstruct
+    void initBcryptSemaphore() {
+        int permits = bcryptMaxConcurrent > 0
+                ? bcryptMaxConcurrent
+                : Runtime.getRuntime().availableProcessors();
+        this.bcryptSemaphore = new Semaphore(permits);
+        log.info("[Auth] BCrypt Semaphore 초기화: {} permits (CPU cores: {})",
+                permits, Runtime.getRuntime().availableProcessors());
+    }
     
     /**
      * 회원가입 (FR-AUTH-001)
@@ -72,8 +88,8 @@ public class AuthService {
                     "Nickname already exists: " + request.getNickname());
         }
 
-        // 비밀번호 암호화
-        String encodedPassword = passwordEncoder.encode(request.getPassword());
+        // 비밀번호 암호화 (Semaphore로 CPU 보호)
+        String encodedPassword = encodePassword(request.getPassword());
 
         // 프로필 이미지 참조 (있을 경우)
         com.ktb.community.entity.Image image = null;
@@ -115,8 +131,8 @@ public class AuthService {
         User user = userRepository.findByEmailWithProfileImage(request.getEmail().toLowerCase().trim())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
-        // 비밀번호 확인
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        // 비밀번호 확인 (Semaphore로 CPU 보호)
+        if (!verifyPassword(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -186,6 +202,41 @@ public class AuthService {
 
         log.debug("[Auth] Access Token 재발급: userId={}", user.getUserId());
         return new AuthResult(accessToken, refreshToken, user);
+    }
+
+    /**
+     * BCrypt 비밀번호 검증 (Semaphore로 동시 실행 제한)
+     * Virtual Threads 환경에서 CPU-bound BCrypt가 코어를 독점하지 않도록 제어
+     */
+    private boolean verifyPassword(String rawPassword, String encodedPassword) {
+        try {
+            bcryptSemaphore.acquire();
+            try {
+                return passwordEncoder.matches(rawPassword, encodedPassword);
+            } finally {
+                bcryptSemaphore.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * BCrypt 비밀번호 인코딩 (Semaphore로 동시 실행 제한)
+     */
+    private String encodePassword(String rawPassword) {
+        try {
+            bcryptSemaphore.acquire();
+            try {
+                return passwordEncoder.encode(rawPassword);
+            } finally {
+                bcryptSemaphore.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
