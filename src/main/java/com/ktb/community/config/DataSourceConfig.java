@@ -34,6 +34,7 @@ public class DataSourceConfig {
     }
 
     @Bean
+    @ConfigurationProperties("spring.datasource.primary.hikari")
     public DataSource primaryDataSource() {
         return primaryDataSourceProperties()
                 .initializeDataSourceBuilder()
@@ -42,6 +43,7 @@ public class DataSourceConfig {
     }
 
     @Bean
+    @ConfigurationProperties("spring.datasource.replica.hikari")
     public DataSource replicaDataSource() {
         return replicaDataSourceProperties()
                 .initializeDataSourceBuilder()
