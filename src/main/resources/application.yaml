@@ -69,10 +69,6 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
-# BCrypt 동시 실행 제한 (Virtual Threads CPU 포화 방지)
-bcrypt:
-  max-concurrent: ${BCRYPT_MAX_CONCURRENT:0}  # 0 = auto (availableProcessors)
-
 # JWT 설정
 jwt:
   secret: ${JWT_SECRET}

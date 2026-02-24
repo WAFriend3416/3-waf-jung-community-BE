@@ -72,7 +72,7 @@ resource "aws_autoscaling_group" "be" {
   health_check_type         = "ELB"
   health_check_grace_period = 180
 
-  min_size         = 1
+  min_size         = 2
   max_size         = 4
   desired_capacity = 2
 
