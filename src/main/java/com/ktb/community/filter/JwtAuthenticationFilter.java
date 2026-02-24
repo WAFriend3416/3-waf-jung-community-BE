@@ -55,7 +55,12 @@ public class JwtAuthenticationFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse res = (HttpServletResponse) response;
 
+        // context-path 제거 (운영: /api/v1/health → /health, 로컬: /health → /health)
         String uri = req.getRequestURI();
+        String contextPath = req.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && !contextPath.equals("/")) {
+            uri = uri.substring(contextPath.length());
+        }
         String method = req.getMethod();
 
         log.debug("[JwtFilter] {} {}", method, uri);
